@@ -28,11 +28,9 @@ export function registerFolderHandlers() {
       const id = uuidv4()
       
       // 获取同级文件夹中的最大排序值
-      const maxOrder = db.prepare(`
-        SELECT COALESCE(MAX(sort_order), -1) as max_order 
-        FROM folders 
-        WHERE parent_id ${folder.parentId ? '= ?' : 'IS NULL'}
-      `).get(folder.parentId ? folder.parentId : undefined) as { max_order: number }
+        const maxOrder = folder.parentId
+          ? db.prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id = ?').get(folder.parentId) as { max_order: number }
+          : db.prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id IS NULL').get() as { max_order: number }
       
       const sortOrder = (maxOrder?.max_order ?? -1) + 1
       

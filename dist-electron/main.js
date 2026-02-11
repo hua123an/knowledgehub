@@ -380,11 +380,7 @@ function registerFolderHandlers() {
   ipcMain.handle(IPC_CHANNELS.FOLDER_CREATE, async (_event, folder) => {
     try {
       const id = v4();
-      const maxOrder = db2.prepare(`
-        SELECT COALESCE(MAX(sort_order), -1) as max_order 
-        FROM folders 
-        WHERE parent_id ${folder.parentId ? "= ?" : "IS NULL"}
-      `).get(folder.parentId ? folder.parentId : void 0);
+      const maxOrder = folder.parentId ? db2.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id = ?").get(folder.parentId) : db2.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id IS NULL").get();
       const sortOrder = ((maxOrder == null ? void 0 : maxOrder.max_order) ?? -1) + 1;
       const stmt = db2.prepare(`
         INSERT INTO folders (id, name, parent_id, sort_order)
