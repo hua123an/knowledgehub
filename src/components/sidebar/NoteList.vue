@@ -1,256 +1,232 @@
 <template>
   <div class="note-list">
-    <div class="list-header">
+    <!-- 头部 -->
+    <div class="list-header" v-if="showHeader">
       <span class="list-title">{{ title }}</span>
-      <el-dropdown @command="handleCreate" trigger="click">
-        <el-button type="primary" size="small" circle>
-          <el-icon><Plus /></el-icon>
-        </el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="markdown">
-              <el-icon><Document /></el-icon>
-              新建笔记
-            </el-dropdown-item>
-            <el-dropdown-item command="bookmark">
-              <el-icon><Link /></el-icon>
-              添加收藏
-            </el-dropdown-item>
-            <el-dropdown-item command="snippet">
-              <el-icon><Memo /></el-icon>
-              新建代码片段
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <span class="list-count" v-if="displayNotes.length">{{ displayNotes.length }}</span>
     </div>
 
-    <el-input
-      v-model="filterText"
-      placeholder="筛选..."
-      size="small"
-      clearable
-      class="filter-input"
-    >
-      <template #prefix>
-        <el-icon><Search /></el-icon>
-      </template>
-    </el-input>
+    <!-- 空状态 -->
+    <div v-if="displayNotes.length === 0" class="empty-hint">
+      <el-icon class="empty-icon"><Document /></el-icon>
+      <p>{{ emptyText }}</p>
+    </div>
 
-    <div class="notes-container">
+    <!-- 笔记列表 -->
+    <div v-else class="list-content">
       <div
-        v-for="note in filteredNotes"
+        v-for="note in displayNotes"
         :key="note.id"
         class="note-item"
         :class="{ active: currentNoteId === note.id }"
-        @click="selectNote(note)"
+        @click="handleSelectNote(note)"
       >
-        <div class="note-icon">
-          <el-icon v-if="note.type === 'markdown'"><Document /></el-icon>
+        <!-- 类型图标 -->
+        <div class="note-icon" :class="note.type">
+          <el-icon v-if="note.type === 'markdown'"><EditPen /></el-icon>
           <el-icon v-else-if="note.type === 'bookmark'"><Link /></el-icon>
-          <el-icon v-else-if="note.type === 'snippet'"><Memo /></el-icon>
+          <el-icon v-else><Document /></el-icon>
         </div>
+        
+        <!-- 笔记信息 -->
         <div class="note-info">
-          <span class="note-title">{{ note.title || '无标题' }}</span>
-          <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
+          <div class="note-title truncate">{{ note.title || '无标题' }}</div>
+          <div class="note-meta">
+            <span class="note-time">{{ formatTime(note.updatedAt) }}</span>
+            <span v-if="note.tags && note.tags.length" class="note-tags">
+              <el-icon><PriceTag /></el-icon>
+              {{ note.tags.length }}
+            </span>
+          </div>
         </div>
-        <el-dropdown @command="(cmd: string) => handleCommand(cmd, note)" trigger="click" @click.stop>
-          <el-button link class="more-btn">
-            <el-icon><MoreFilled /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="delete">
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
       </div>
-
-      <el-empty v-if="filteredNotes.length === 0" description="暂无笔记" :image-size="60" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Plus, Document, Link, Memo, Search, MoreFilled, Delete } from '@element-plus/icons-vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
-import { useNotesStore } from '../../stores/notes'
-import type { Note, NoteType } from '../../types'
+import { Document, EditPen, Link, PriceTag } from '@element-plus/icons-vue'
+import { useNotesStore } from '@/stores/notes'
+import type { Note } from '@/types'
 
-const props = withDefaults(defineProps<{
+interface Props {
   title?: string
-  folderId?: string | null
-}>(), {
-  title: '所有笔记',
-  folderId: null
+  showHeader?: boolean
+  limit?: number
+  emptyText?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  title: '最近笔记',
+  showHeader: true,
+  limit: 0,
+  emptyText: '暂无笔记'
 })
 
 const router = useRouter()
 const route = useRoute()
 const notesStore = useNotesStore()
 
-const filterText = ref('')
-
 const currentNoteId = computed(() => route.params.id as string)
 
-const filteredNotes = computed(() => {
-  let notes = notesStore.notes
-  
-  // Filter by folder if specified
-  if (props.folderId) {
-    notes = notes.filter(n => n.folderId === props.folderId)
-  }
-  
-  // Filter by search text
-  if (filterText.value) {
-    const query = filterText.value.toLowerCase()
-    notes = notes.filter(n => 
-      n.title.toLowerCase().includes(query) ||
-      n.content.toLowerCase().includes(query)
-    )
-  }
-  
-  // Sort by update time
-  return [...notes].sort((a, b) => 
+const displayNotes = computed(() => {
+  const notes = [...notesStore.filteredNotes].sort((a, b) => 
     new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   )
+  return props.limit > 0 ? notes.slice(0, props.limit) : notes
 })
 
-function formatDate(date: string) {
-  const d = new Date(date)
+function formatTime(time: string): string {
+  const date = new Date(time)
   const now = new Date()
-  const diff = now.getTime() - d.getTime()
+  const diff = now.getTime() - date.getTime()
   
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
   
-  return d.toLocaleDateString('zh-CN')
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-function selectNote(note: Note) {
-  router.push({ name: 'editor', params: { id: note.id } })
-}
-
-async function handleCreate(type: NoteType) {
-  const note = await notesStore.createNote({
-    title: type === 'markdown' ? '无标题笔记' : 
-           type === 'bookmark' ? '新收藏' : '代码片段',
-    content: '',
-    type,
-    folderId: props.folderId || undefined
-  })
-  if (note) {
-    router.push({ name: 'editor', params: { id: note.id } })
-  }
-}
-
-async function handleCommand(command: string, note: Note) {
-  if (command === 'delete') {
-    try {
-      await ElMessageBox.confirm('确定要删除这个笔记吗？', '确认删除', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-      
-      await notesStore.deleteNote(note.id)
-      ElMessage.success('已删除')
-      
-      if (currentNoteId.value === note.id) {
-        router.push({ name: 'home' })
-      }
-    } catch {
-      // cancelled
-    }
-  }
+function handleSelectNote(note: Note) {
+  router.push(`/editor/${note.id}`)
 }
 </script>
 
 <style scoped>
 .note-list {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .list-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 
 .list-title {
-  font-weight: 500;
-  font-size: 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.filter-input {
-  margin: 8px 12px;
+.list-count {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
 }
 
-.notes-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.note-item {
+.empty-hint {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  padding: var(--space-xl);
+  text-align: center;
 }
 
-.note-item:hover {
-  background: var(--el-fill-color-light);
+.empty-icon {
+  font-size: 32px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-md);
 }
 
-.note-item.active {
-  background: var(--el-color-primary-light-9);
+.empty-hint p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
 
-.note-icon {
-  color: var(--el-text-color-secondary);
-}
-
-.note-info {
-  flex: 1;
-  min-width: 0;
+.list-content {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.note-title {
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.note-item:hover {
+  background: var(--bg-hover);
+}
+
+.note-item.active {
+  background: var(--primary-light);
+}
+
+.note-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
   font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.note-date {
-  font-size: 11px;
-  color: var(--el-text-color-placeholder);
+.note-icon.markdown {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--type-markdown);
 }
 
-.more-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
+.note-icon.bookmark {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--type-bookmark);
 }
 
-.note-item:hover .more-btn {
-  opacity: 1;
+.note-icon.snippet {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--type-snippet);
+}
+
+.note-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.note-item.active .note-title {
+  color: var(--primary-color);
+}
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.note-tags {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 </style>
