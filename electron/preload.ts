@@ -1,70 +1,74 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
-// IPC 通道定义 (与 src/types/index.ts 保持同步)
-const IPC_CHANNELS = {
-  NOTE_CREATE: 'note:create',
-  NOTE_UPDATE: 'note:update',
-  NOTE_DELETE: 'note:delete',
-  NOTE_GET: 'note:get',
-  NOTE_LIST: 'note:list',
-  NOTE_SEARCH: 'note:search',
-  FOLDER_CREATE: 'folder:create',
-  FOLDER_UPDATE: 'folder:update',
-  FOLDER_DELETE: 'folder:delete',
-  FOLDER_LIST: 'folder:list',
-  TAG_CREATE: 'tag:create',
-  TAG_UPDATE: 'tag:update',
-  TAG_DELETE: 'tag:delete',
-  TAG_LIST: 'tag:list',
-  TAG_ADD_TO_NOTE: 'tag:addToNote',
-  TAG_REMOVE_FROM_NOTE: 'tag:removeFromNote',
-  LINK_CREATE: 'link:create',
-  LINK_DELETE: 'link:delete',
-  LINK_GET_BY_NOTE: 'link:getByNote',
-  LINK_GET_GRAPH: 'link:getGraph',
-  SETTINGS_GET: 'settings:get',
-  SETTINGS_SET: 'settings:set',
-} as const
-
-// API 接口定义
 const api = {
   // 笔记操作
-  noteCreate: (note: any) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_CREATE, note),
-  noteUpdate: (id: string, updates: any) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_UPDATE, id, updates),
-  noteDelete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_DELETE, id),
-  noteGet: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_GET, id),
-  noteList: (filters?: any) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_LIST, filters),
-  noteSearch: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.NOTE_SEARCH, query),
+  noteCreate: (note: any) => ipcRenderer.invoke('note:create', note),
+  noteUpdate: (id: string, updates: any) => ipcRenderer.invoke('note:update', id, updates),
+  noteDelete: (id: string) => ipcRenderer.invoke('note:delete', id),
+  noteGet: (id: string) => ipcRenderer.invoke('note:get', id),
+  noteList: (filters?: any) => ipcRenderer.invoke('note:list', filters),
+  noteSearch: (query: string) => ipcRenderer.invoke('note:search', query),
 
   // 文件夹操作
-  folderCreate: (folder: any) => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_CREATE, folder),
-  folderUpdate: (id: string, updates: any) => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_UPDATE, id, updates),
-  folderDelete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_DELETE, id),
-  folderList: () => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_LIST),
+  folderCreate: (folder: any) => ipcRenderer.invoke('folder:create', folder),
+  folderUpdate: (id: string, updates: any) => ipcRenderer.invoke('folder:update', id, updates),
+  folderDelete: (id: string) => ipcRenderer.invoke('folder:delete', id),
+  folderList: () => ipcRenderer.invoke('folder:list'),
 
   // 标签操作
-  tagCreate: (tag: any) => ipcRenderer.invoke(IPC_CHANNELS.TAG_CREATE, tag),
-  tagUpdate: (id: string, updates: any) => ipcRenderer.invoke(IPC_CHANNELS.TAG_UPDATE, id, updates),
-  tagDelete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.TAG_DELETE, id),
-  tagList: () => ipcRenderer.invoke(IPC_CHANNELS.TAG_LIST),
-  tagAddToNote: (noteId: string, tagId: string) => ipcRenderer.invoke(IPC_CHANNELS.TAG_ADD_TO_NOTE, noteId, tagId),
-  tagRemoveFromNote: (noteId: string, tagId: string) => ipcRenderer.invoke(IPC_CHANNELS.TAG_REMOVE_FROM_NOTE, noteId, tagId),
+  tagCreate: (tag: any) => ipcRenderer.invoke('tag:create', tag),
+  tagUpdate: (id: string, updates: any) => ipcRenderer.invoke('tag:update', id, updates),
+  tagDelete: (id: string) => ipcRenderer.invoke('tag:delete', id),
+  tagList: () => ipcRenderer.invoke('tag:list'),
+  tagAddToNote: (noteId: string, tagId: string) => ipcRenderer.invoke('tag:addToNote', noteId, tagId),
+  tagRemoveFromNote: (noteId: string, tagId: string) => ipcRenderer.invoke('tag:removeFromNote', noteId, tagId),
 
   // 链接操作
-  linkCreate: (sourceId: string, targetId: string) => ipcRenderer.invoke(IPC_CHANNELS.LINK_CREATE, sourceId, targetId),
-  linkDelete: (sourceId: string, targetId: string) => ipcRenderer.invoke(IPC_CHANNELS.LINK_DELETE, sourceId, targetId),
-  linkGetByNote: (noteId: string) => ipcRenderer.invoke(IPC_CHANNELS.LINK_GET_BY_NOTE, noteId),
-  linkGetGraph: () => ipcRenderer.invoke(IPC_CHANNELS.LINK_GET_GRAPH),
+  linkCreate: (sourceId: string, targetId: string) => ipcRenderer.invoke('link:create', sourceId, targetId),
+  linkDelete: (sourceId: string, targetId: string) => ipcRenderer.invoke('link:delete', sourceId, targetId),
+  linkGetByNote: (noteId: string) => ipcRenderer.invoke('link:getByNote', noteId),
+  linkGetGraph: () => ipcRenderer.invoke('link:getGraph'),
 
   // 设置操作
-  settingsGet: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
-  settingsSet: (settings: any) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, settings),
+  settingsGet: () => ipcRenderer.invoke('settings:get'),
+  settingsSet: (settings: any) => ipcRenderer.invoke('settings:set', settings),
+
+  // AI 操作
+  aiChat: (messages: any[], systemPrompt?: string) => ipcRenderer.invoke('ai:chat', messages, systemPrompt),
+  aiChatStream: (messages: any[], systemPrompt?: string) => ipcRenderer.invoke('ai:chatStream', messages, systemPrompt),
+  aiStop: () => ipcRenderer.invoke('ai:stop'),
+  aiSummarize: (content: string) => ipcRenderer.invoke('ai:summarize', content),
+  aiSuggestTags: (content: string) => ipcRenderer.invoke('ai:suggestTags', content),
+  aiPolish: (content: string) => ipcRenderer.invoke('ai:polish', content),
+  aiContinue: (content: string) => ipcRenderer.invoke('ai:continue', content),
+  aiTranslate: (content: string, lang: string) => ipcRenderer.invoke('ai:translate', content, lang),
+  aiExplain: (content: string) => ipcRenderer.invoke('ai:explain', content),
+  aiSearchEnhance: (query: string) => ipcRenderer.invoke('ai:searchEnhance', query),
+  aiChatHistoryList: () => ipcRenderer.invoke('ai:chatHistoryList'),
+  aiChatHistoryGet: (id: string) => ipcRenderer.invoke('ai:chatHistoryGet', id),
+  aiChatHistorySave: (id: string, title: string, messages: any[]) => ipcRenderer.invoke('ai:chatHistorySave', id, title, messages),
+  aiChatHistoryDelete: (id: string) => ipcRenderer.invoke('ai:chatHistoryDelete', id),
+
+  // AI stream 事件监听
+  onAiStreamChunk: (callback: (text: string) => void) => {
+    const handler = (_event: any, text: string) => callback(text)
+    ipcRenderer.on('ai:stream:chunk', handler)
+    return () => ipcRenderer.off('ai:stream:chunk', handler)
+  },
+  onAiStreamDone: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('ai:stream:done', handler)
+    return () => ipcRenderer.off('ai:stream:done', handler)
+  },
+  onAiStreamError: (callback: (err: string) => void) => {
+    const handler = (_event: any, err: string) => callback(err)
+    ipcRenderer.on('ai:stream:error', handler)
+    return () => ipcRenderer.off('ai:stream:error', handler)
+  },
 }
 
-// 暴露 API 到渲染进程
 contextBridge.exposeInMainWorld('api', api)
 
-// 保留原有的 ipcRenderer 暴露（兼容性）
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
@@ -84,5 +88,4 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 })
 
-// 类型声明
 export type ApiType = typeof api

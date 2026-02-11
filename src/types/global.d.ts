@@ -37,6 +37,27 @@ declare global {
       // 设置操作
       settingsGet: () => Promise<ApiResponse<AppSettings>>
       settingsSet: (settings: AppSettings) => Promise<ApiResponse<void>>
+
+      // AI 操作
+      aiChat: (messages: Array<{ role: string; content: string }>, systemPrompt?: string) => Promise<ApiResponse<string>>
+      aiChatStream: (messages: Array<{ role: string; content: string }>, systemPrompt?: string) => Promise<ApiResponse<void>>
+      aiStop: () => Promise<ApiResponse<void>>
+      aiSummarize: (content: string) => Promise<ApiResponse<string>>
+      aiSuggestTags: (content: string) => Promise<ApiResponse<string[]>>
+      aiPolish: (content: string) => Promise<ApiResponse<string>>
+      aiContinue: (content: string) => Promise<ApiResponse<string>>
+      aiTranslate: (content: string, lang: string) => Promise<ApiResponse<string>>
+      aiExplain: (content: string) => Promise<ApiResponse<string>>
+      aiSearchEnhance: (query: string) => Promise<ApiResponse<string[]>>
+      aiChatHistoryList: () => Promise<ApiResponse<Array<{ id: string; title: string; created_at: string; updated_at: string }>>>
+      aiChatHistoryGet: (id: string) => Promise<ApiResponse<Array<{ role: string; content: string; created_at: string }>>>
+      aiChatHistorySave: (id: string, title: string, messages: Array<{ role: string; content: string }>) => Promise<ApiResponse<void>>
+      aiChatHistoryDelete: (id: string) => Promise<ApiResponse<void>>
+
+      // AI stream 事件
+      onAiStreamChunk: (callback: (text: string) => void) => () => void
+      onAiStreamDone: (callback: () => void) => () => void
+      onAiStreamError: (callback: (err: string) => void) => () => void
     }
     ipcRenderer: {
       on: (channel: string, listener: (event: any, ...args: any[]) => void) => void

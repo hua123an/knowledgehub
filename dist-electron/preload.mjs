@@ -1,57 +1,64 @@
 "use strict";
 const electron = require("electron");
-const IPC_CHANNELS = {
-  NOTE_CREATE: "note:create",
-  NOTE_UPDATE: "note:update",
-  NOTE_DELETE: "note:delete",
-  NOTE_GET: "note:get",
-  NOTE_LIST: "note:list",
-  NOTE_SEARCH: "note:search",
-  FOLDER_CREATE: "folder:create",
-  FOLDER_UPDATE: "folder:update",
-  FOLDER_DELETE: "folder:delete",
-  FOLDER_LIST: "folder:list",
-  TAG_CREATE: "tag:create",
-  TAG_UPDATE: "tag:update",
-  TAG_DELETE: "tag:delete",
-  TAG_LIST: "tag:list",
-  TAG_ADD_TO_NOTE: "tag:addToNote",
-  TAG_REMOVE_FROM_NOTE: "tag:removeFromNote",
-  LINK_CREATE: "link:create",
-  LINK_DELETE: "link:delete",
-  LINK_GET_BY_NOTE: "link:getByNote",
-  LINK_GET_GRAPH: "link:getGraph",
-  SETTINGS_GET: "settings:get",
-  SETTINGS_SET: "settings:set"
-};
 const api = {
   // 笔记操作
-  noteCreate: (note) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_CREATE, note),
-  noteUpdate: (id, updates) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_UPDATE, id, updates),
-  noteDelete: (id) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_DELETE, id),
-  noteGet: (id) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_GET, id),
-  noteList: (filters) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_LIST, filters),
-  noteSearch: (query) => electron.ipcRenderer.invoke(IPC_CHANNELS.NOTE_SEARCH, query),
+  noteCreate: (note) => electron.ipcRenderer.invoke("note:create", note),
+  noteUpdate: (id, updates) => electron.ipcRenderer.invoke("note:update", id, updates),
+  noteDelete: (id) => electron.ipcRenderer.invoke("note:delete", id),
+  noteGet: (id) => electron.ipcRenderer.invoke("note:get", id),
+  noteList: (filters) => electron.ipcRenderer.invoke("note:list", filters),
+  noteSearch: (query) => electron.ipcRenderer.invoke("note:search", query),
   // 文件夹操作
-  folderCreate: (folder) => electron.ipcRenderer.invoke(IPC_CHANNELS.FOLDER_CREATE, folder),
-  folderUpdate: (id, updates) => electron.ipcRenderer.invoke(IPC_CHANNELS.FOLDER_UPDATE, id, updates),
-  folderDelete: (id) => electron.ipcRenderer.invoke(IPC_CHANNELS.FOLDER_DELETE, id),
-  folderList: () => electron.ipcRenderer.invoke(IPC_CHANNELS.FOLDER_LIST),
+  folderCreate: (folder) => electron.ipcRenderer.invoke("folder:create", folder),
+  folderUpdate: (id, updates) => electron.ipcRenderer.invoke("folder:update", id, updates),
+  folderDelete: (id) => electron.ipcRenderer.invoke("folder:delete", id),
+  folderList: () => electron.ipcRenderer.invoke("folder:list"),
   // 标签操作
-  tagCreate: (tag) => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_CREATE, tag),
-  tagUpdate: (id, updates) => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_UPDATE, id, updates),
-  tagDelete: (id) => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_DELETE, id),
-  tagList: () => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_LIST),
-  tagAddToNote: (noteId, tagId) => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_ADD_TO_NOTE, noteId, tagId),
-  tagRemoveFromNote: (noteId, tagId) => electron.ipcRenderer.invoke(IPC_CHANNELS.TAG_REMOVE_FROM_NOTE, noteId, tagId),
+  tagCreate: (tag) => electron.ipcRenderer.invoke("tag:create", tag),
+  tagUpdate: (id, updates) => electron.ipcRenderer.invoke("tag:update", id, updates),
+  tagDelete: (id) => electron.ipcRenderer.invoke("tag:delete", id),
+  tagList: () => electron.ipcRenderer.invoke("tag:list"),
+  tagAddToNote: (noteId, tagId) => electron.ipcRenderer.invoke("tag:addToNote", noteId, tagId),
+  tagRemoveFromNote: (noteId, tagId) => electron.ipcRenderer.invoke("tag:removeFromNote", noteId, tagId),
   // 链接操作
-  linkCreate: (sourceId, targetId) => electron.ipcRenderer.invoke(IPC_CHANNELS.LINK_CREATE, sourceId, targetId),
-  linkDelete: (sourceId, targetId) => electron.ipcRenderer.invoke(IPC_CHANNELS.LINK_DELETE, sourceId, targetId),
-  linkGetByNote: (noteId) => electron.ipcRenderer.invoke(IPC_CHANNELS.LINK_GET_BY_NOTE, noteId),
-  linkGetGraph: () => electron.ipcRenderer.invoke(IPC_CHANNELS.LINK_GET_GRAPH),
+  linkCreate: (sourceId, targetId) => electron.ipcRenderer.invoke("link:create", sourceId, targetId),
+  linkDelete: (sourceId, targetId) => electron.ipcRenderer.invoke("link:delete", sourceId, targetId),
+  linkGetByNote: (noteId) => electron.ipcRenderer.invoke("link:getByNote", noteId),
+  linkGetGraph: () => electron.ipcRenderer.invoke("link:getGraph"),
   // 设置操作
-  settingsGet: () => electron.ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
-  settingsSet: (settings) => electron.ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, settings)
+  settingsGet: () => electron.ipcRenderer.invoke("settings:get"),
+  settingsSet: (settings) => electron.ipcRenderer.invoke("settings:set", settings),
+  // AI 操作
+  aiChat: (messages, systemPrompt) => electron.ipcRenderer.invoke("ai:chat", messages, systemPrompt),
+  aiChatStream: (messages, systemPrompt) => electron.ipcRenderer.invoke("ai:chatStream", messages, systemPrompt),
+  aiStop: () => electron.ipcRenderer.invoke("ai:stop"),
+  aiSummarize: (content) => electron.ipcRenderer.invoke("ai:summarize", content),
+  aiSuggestTags: (content) => electron.ipcRenderer.invoke("ai:suggestTags", content),
+  aiPolish: (content) => electron.ipcRenderer.invoke("ai:polish", content),
+  aiContinue: (content) => electron.ipcRenderer.invoke("ai:continue", content),
+  aiTranslate: (content, lang) => electron.ipcRenderer.invoke("ai:translate", content, lang),
+  aiExplain: (content) => electron.ipcRenderer.invoke("ai:explain", content),
+  aiSearchEnhance: (query) => electron.ipcRenderer.invoke("ai:searchEnhance", query),
+  aiChatHistoryList: () => electron.ipcRenderer.invoke("ai:chatHistoryList"),
+  aiChatHistoryGet: (id) => electron.ipcRenderer.invoke("ai:chatHistoryGet", id),
+  aiChatHistorySave: (id, title, messages) => electron.ipcRenderer.invoke("ai:chatHistorySave", id, title, messages),
+  aiChatHistoryDelete: (id) => electron.ipcRenderer.invoke("ai:chatHistoryDelete", id),
+  // AI stream 事件监听
+  onAiStreamChunk: (callback) => {
+    const handler = (_event, text) => callback(text);
+    electron.ipcRenderer.on("ai:stream:chunk", handler);
+    return () => electron.ipcRenderer.off("ai:stream:chunk", handler);
+  },
+  onAiStreamDone: (callback) => {
+    const handler = () => callback();
+    electron.ipcRenderer.on("ai:stream:done", handler);
+    return () => electron.ipcRenderer.off("ai:stream:done", handler);
+  },
+  onAiStreamError: (callback) => {
+    const handler = (_event, err) => callback(err);
+    electron.ipcRenderer.on("ai:stream:error", handler);
+    return () => electron.ipcRenderer.off("ai:stream:error", handler);
+  }
 };
 electron.contextBridge.exposeInMainWorld("api", api);
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
