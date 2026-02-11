@@ -1,181 +1,99 @@
 <template>
   <div class="home-view">
-    <!-- 顶部欢迎区 -->
-    <header class="welcome-section">
-      <div class="welcome-content">
-        <h1 class="welcome-title">欢迎回来</h1>
-        <p class="welcome-subtitle">{{ getGreeting() }}，继续探索你的知识库吧</p>
+    <!-- 头部 -->
+    <header class="home-header">
+      <div>
+        <h1 class="home-title">{{ getGreeting() }}</h1>
+        <p class="home-subtitle">{{ notesStore.notes.length }} 篇笔记 · {{ tagsStore.tags.length }} 个标签</p>
       </div>
-      <div class="quick-actions">
-        <button class="quick-btn" @click="createNote('markdown')">
-          <el-icon><EditPen /></el-icon>
-          <span>新笔记</span>
-        </button>
-        <button class="quick-btn" @click="createNote('bookmark')">
-          <el-icon><Link /></el-icon>
-          <span>添加书签</span>
-        </button>
-        <button class="quick-btn" @click="createNote('snippet')">
-          <el-icon><Document /></el-icon>
-          <span>代码片段</span>
+      <div class="home-actions">
+        <button class="btn btn-primary" @click="createNote('markdown')">
+          <el-icon><Plus /></el-icon>
+          新建笔记
         </button>
       </div>
     </header>
 
-    <!-- 统计卡片 -->
-    <section class="stats-section">
-      <div class="stat-card">
-        <div class="stat-icon markdown">
-          <el-icon><EditPen /></el-icon>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.markdown }}</div>
-          <div class="stat-label">Markdown 笔记</div>
-        </div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-icon bookmark">
-          <el-icon><Link /></el-icon>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.bookmark }}</div>
-          <div class="stat-label">网页书签</div>
-        </div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-icon snippet">
-          <el-icon><Document /></el-icon>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.snippet }}</div>
-          <div class="stat-label">代码片段</div>
-        </div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-icon tags">
-          <el-icon><PriceTag /></el-icon>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ tagsStore.tags.length }}</div>
-          <div class="stat-label">标签</div>
-        </div>
+    <!-- 统计 -->
+    <section class="stats-row">
+      <div class="stat-item" v-for="item in statItems" :key="item.label">
+        <span class="stat-value">{{ item.value }}</span>
+        <span class="stat-label">{{ item.label }}</span>
       </div>
     </section>
 
-    <!-- 主要内容区 -->
-    <div class="main-sections">
-      <!-- 最近笔记 -->
-      <section class="content-section">
+    <!-- 主内容 -->
+    <div class="home-body">
+      <!-- 最近编辑 -->
+      <section class="home-section">
         <div class="section-header">
-          <h2 class="section-title">
-            <el-icon><Clock /></el-icon>
-            最近编辑
-          </h2>
-          <router-link to="/search" class="view-all">查看全部</router-link>
+          <h2 class="section-title">最近编辑</h2>
+          <router-link v-if="recentNotes.length" to="/search" class="section-link">查看全部</router-link>
         </div>
-        
-        <div v-if="recentNotes.length === 0" class="empty-state">
-          <div class="empty-illustration">
-            <svg viewBox="0 0 120 120" fill="none">
-              <circle cx="60" cy="60" r="50" stroke="currentColor" stroke-width="2" opacity="0.2"/>
-              <path d="M40 50h40M40 60h30M40 70h35" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
-              <circle cx="85" cy="85" r="15" fill="currentColor" opacity="0.1"/>
-              <path d="M85 80v10M80 85h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <p class="empty-text">还没有笔记，开始创建吧！</p>
-          <button class="btn btn-primary" @click="createNote('markdown')">
+
+        <div v-if="recentNotes.length === 0" class="empty-hint">
+          <p>还没有笔记</p>
+          <button class="btn btn-secondary" @click="createNote('markdown')">
             <el-icon><Plus /></el-icon>
             创建第一篇笔记
           </button>
         </div>
-        
-        <div v-else class="notes-grid">
+
+        <div v-else class="notes-list">
           <div
             v-for="note in recentNotes"
             :key="note.id"
-            class="note-card card-interactive"
+            class="note-row"
             @click="openNote(note.id)"
           >
-            <div class="note-card-header">
-              <div class="note-type-badge" :class="note.type">
-                <el-icon v-if="note.type === 'markdown'"><EditPen /></el-icon>
-                <el-icon v-else-if="note.type === 'bookmark'"><Link /></el-icon>
-                <el-icon v-else><Document /></el-icon>
-              </div>
-              <span class="note-time">{{ formatTime(note.updatedAt) }}</span>
+            <div class="note-type-dot" :class="note.type"></div>
+            <div class="note-row-info">
+              <span class="note-row-title">{{ note.title || '无标题' }}</span>
+              <span class="note-row-preview">{{ getPreview(note) }}</span>
             </div>
-            
-            <h3 class="note-card-title">{{ note.title || '无标题' }}</h3>
-            
-            <p class="note-card-preview line-clamp-2">
-              {{ getPreview(note) }}
-            </p>
-            
-            <div class="note-card-footer" v-if="note.tags && note.tags.length">
-              <div class="note-tags">
-                <span
-                  v-for="tag in note.tags.slice(0, 3)"
-                  :key="tag.id"
-                  class="mini-tag"
-                  :style="{ '--tag-color': tag.color }"
-                >
-                  {{ tag.name }}
-                </span>
-                <span v-if="note.tags.length > 3" class="more-tags">
-                  +{{ note.tags.length - 3 }}
-                </span>
-              </div>
-            </div>
+            <span class="note-row-time">{{ formatTime(note.updatedAt) }}</span>
           </div>
         </div>
       </section>
 
-      <!-- 侧边小组件 -->
-      <aside class="sidebar-widgets">
-        <!-- 热门标签 -->
-        <section class="widget">
-          <h3 class="widget-title">
-            <el-icon><PriceTag /></el-icon>
-            热门标签
-          </h3>
-          <div v-if="popularTags.length === 0" class="widget-empty">
-            暂无标签
-          </div>
-          <div v-else class="tag-list">
-            <div
-              v-for="item in popularTags"
-              :key="item.tag.id"
-              class="tag-row"
-              @click="filterByTag(item.tag)"
-            >
-              <span class="tag-dot" :style="{ background: item.tag.color }"></span>
-              <span class="tag-name">{{ item.tag.name }}</span>
-              <span class="tag-count">{{ item.count }}</span>
-            </div>
+      <!-- 侧栏 -->
+      <aside class="home-aside">
+        <!-- 快速操作 -->
+        <section class="aside-section">
+          <h3 class="aside-title">快速操作</h3>
+          <div class="quick-links">
+            <button class="quick-link" @click="createNote('bookmark')">
+              <el-icon><Link /></el-icon>
+              添加书签
+            </button>
+            <button class="quick-link" @click="createNote('snippet')">
+              <el-icon><Document /></el-icon>
+              代码片段
+            </button>
+            <router-link to="/search" class="quick-link">
+              <el-icon><Search /></el-icon>
+              搜索
+            </router-link>
+            <router-link to="/graph" class="quick-link">
+              <el-icon><Share /></el-icon>
+              知识图谱
+            </router-link>
           </div>
         </section>
 
-        <!-- 快速跳转 -->
-        <section class="widget">
-          <h3 class="widget-title">
-            <el-icon><Compass /></el-icon>
-            快速导航
-          </h3>
-          <div class="nav-links">
-            <router-link to="/search" class="nav-link">
-              <el-icon><Search /></el-icon>
-              <span>搜索笔记</span>
-              <el-icon class="arrow"><ArrowRight /></el-icon>
-            </router-link>
-            <router-link to="/graph" class="nav-link">
-              <el-icon><Share /></el-icon>
-              <span>知识图谱</span>
-              <el-icon class="arrow"><ArrowRight /></el-icon>
-            </router-link>
+        <!-- 标签 -->
+        <section class="aside-section" v-if="popularTags.length">
+          <h3 class="aside-title">标签</h3>
+          <div class="aside-tags">
+            <span
+              v-for="item in popularTags"
+              :key="item.tag.id"
+              class="aside-tag"
+              @click="filterByTag(item.tag)"
+            >
+              {{ item.tag.name }}
+              <span class="aside-tag-count">{{ item.count }}</span>
+            </span>
           </div>
         </section>
       </aside>
@@ -186,10 +104,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { 
-  EditPen, Link, Document, PriceTag, Clock, Plus,
-  Search, Share, Compass, ArrowRight
-} from '@element-plus/icons-vue'
+import { Plus, Link, Document, Search, Share } from '@element-plus/icons-vue'
 import { useNotesStore } from '@/stores/notes'
 import { useTagsStore } from '@/stores/tags'
 import { useFoldersStore } from '@/stores/folders'
@@ -200,24 +115,27 @@ const notesStore = useNotesStore()
 const tagsStore = useTagsStore()
 const foldersStore = useFoldersStore()
 
-// 统计数据
 const stats = computed(() => ({
   markdown: notesStore.notes.filter(n => n.type === 'markdown').length,
   bookmark: notesStore.notes.filter(n => n.type === 'bookmark').length,
   snippet: notesStore.notes.filter(n => n.type === 'snippet').length,
 }))
 
-// 最近笔记
+const statItems = computed(() => [
+  { value: stats.value.markdown, label: '笔记' },
+  { value: stats.value.bookmark, label: '书签' },
+  { value: stats.value.snippet, label: '代码' },
+  { value: tagsStore.tags.length, label: '标签' },
+])
+
 const recentNotes = computed(() => {
   return [...notesStore.notes]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 6)
+    .slice(0, 10)
 })
 
-// 热门标签
 const popularTags = computed(() => {
   const tagCounts = new Map<string, { tag: Tag; count: number }>()
-  
   notesStore.notes.forEach(note => {
     note.tags?.forEach(tag => {
       if (tagCounts.has(tag.id)) {
@@ -227,10 +145,7 @@ const popularTags = computed(() => {
       }
     })
   })
-  
-  return [...tagCounts.values()]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5)
+  return [...tagCounts.values()].sort((a, b) => b.count - a.count).slice(0, 8)
 })
 
 function getGreeting(): string {
@@ -246,33 +161,20 @@ function formatTime(time: string): string {
   const date = new Date(time)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
-  
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
-  
   if (minutes < 1) return '刚刚'
   if (minutes < 60) return `${minutes}分钟前`
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
-  
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 function getPreview(note: Note): string {
-  if (note.type === 'bookmark') {
-    return note.description || note.url || '暂无描述'
-  }
-  if (note.type === 'snippet') {
-    return note.content?.slice(0, 100) || '暂无代码'
-  }
-  // Markdown - 移除标题和格式
-  const content = note.content || ''
-  return content
-    .replace(/^#+\s+.*/gm, '')
-    .replace(/\*\*|__|`|#|\[|\]|\(|\)/g, '')
-    .trim()
-    .slice(0, 100) || '暂无内容'
+  if (note.type === 'bookmark') return note.description || note.url || ''
+  if (note.type === 'snippet') return note.content?.slice(0, 80) || ''
+  return (note.content || '').replace(/[#*`\[\]]/g, '').trim().slice(0, 80)
 }
 
 async function createNote(type: 'markdown' | 'bookmark' | 'snippet') {
@@ -282,14 +184,10 @@ async function createNote(type: 'markdown' | 'bookmark' | 'snippet') {
     content: '',
     folderId: foldersStore.currentFolder?.id || null,
   })
-  if (note) {
-    router.push(`/editor/${note.id}`)
-  }
+  if (note) router.push(`/editor/${note.id}`)
 }
 
-function openNote(id: string) {
-  router.push(`/editor/${id}`)
-}
+function openNote(id: string) { router.push(`/editor/${id}`) }
 
 function filterByTag(tag: Tag) {
   notesStore.setFilter({ tagId: tag.id })
@@ -301,133 +199,58 @@ function filterByTag(tag: Tag) {
 .home-view {
   height: 100%;
   overflow-y: auto;
-  padding: var(--space-xl);
-  background: var(--bg-secondary);
+  padding: var(--space-xl) var(--space-2xl);
 }
 
-/* 欢迎区 */
-.welcome-section {
+.home-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-xl);
-  padding: var(--space-xl);
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-  border-radius: var(--radius-xl);
-  color: white;
-}
-
-.welcome-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: var(--space-xs);
-}
-
-.welcome-subtitle {
-  opacity: 0.9;
-  font-size: 0.9375rem;
-}
-
-.quick-actions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.quick-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: var(--radius-md);
-  color: white;
-  font-weight: 500;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(4px);
-}
-
-.quick-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-}
-
-/* 统计卡片 */
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-lg);
+  align-items: flex-start;
   margin-bottom: var(--space-xl);
 }
 
-.stat-card {
+.home-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.home-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
+
+/* 统计 */
+.stats-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  transition: all var(--transition-fast);
+  gap: var(--space-2xl);
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-xl);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.stat-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
+.stat-item {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-lg);
-  font-size: 20px;
-}
-
-.stat-icon.markdown {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--type-markdown);
-}
-
-.stat-icon.bookmark {
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--type-bookmark);
-}
-
-.stat-icon.snippet {
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--type-snippet);
-}
-
-.stat-icon.tags {
-  background: rgba(236, 72, 153, 0.1);
-  color: #ec4899;
+  flex-direction: column;
 }
 
 .stat-value {
   font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 4px;
 }
 
 .stat-label {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
 }
 
-/* 主内容区 */
-.main-sections {
+/* 主体 */
+.home-body {
   display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: var(--space-xl);
-}
-
-.content-section {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
+  grid-template-columns: 1fr 240px;
+  gap: var(--space-2xl);
 }
 
 .section-header {
@@ -438,276 +261,165 @@ function filterByTag(tag: Tag) {
 }
 
 .section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.view-all {
-  font-size: 0.875rem;
-  color: var(--primary-color);
-}
-
-.view-all:hover {
-  text-decoration: underline;
-}
-
-/* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--space-2xl);
-  text-align: center;
-}
-
-.empty-illustration {
-  width: 120px;
-  height: 120px;
-  color: var(--text-tertiary);
-  margin-bottom: var(--space-lg);
-}
-
-.empty-text {
-  color: var(--text-secondary);
-  margin-bottom: var(--space-lg);
-}
-
-/* 笔记网格 */
-.notes-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-md);
-}
-
-.note-card {
-  padding: var(--space-lg);
-  cursor: pointer;
-}
-
-.note-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-sm);
-}
-
-.note-type-badge {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-}
-
-.note-type-badge.markdown {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--type-markdown);
-}
-
-.note-type-badge.bookmark {
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--type-bookmark);
-}
-
-.note-type-badge.snippet {
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--type-snippet);
-}
-
-.note-time {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
-
-.note-card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: var(--space-sm);
-}
-
-.note-card-preview {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: var(--space-md);
-}
-
-.note-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.note-tags {
-  display: flex;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-}
-
-.mini-tag {
-  font-size: 0.6875rem;
-  padding: 2px 8px;
-  background: color-mix(in srgb, var(--tag-color) 15%, transparent);
-  color: var(--tag-color);
-  border-radius: var(--radius-full);
-}
-
-.more-tags {
-  font-size: 0.6875rem;
-  color: var(--text-tertiary);
-}
-
-/* 侧边小组件 */
-.sidebar-widgets {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.widget {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-}
-
-.widget-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: var(--space-md);
 }
 
-.widget-empty {
-  text-align: center;
-  padding: var(--space-lg);
+.section-link {
+  font-size: 0.8125rem;
   color: var(--text-tertiary);
-  font-size: 0.875rem;
 }
 
-.tag-list {
+.section-link:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.empty-hint {
+  text-align: center;
+  padding: var(--space-2xl);
+  color: var(--text-tertiary);
+}
+
+.empty-hint p {
+  margin-bottom: var(--space-lg);
+}
+
+/* 笔记列表 */
+.notes-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
 }
 
-.tag-row {
+.note-row {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--border-light);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
-.tag-row:hover {
-  background: var(--bg-hover);
+.note-row:hover {
+  background: var(--bg-secondary);
 }
 
-.tag-dot {
+.note-row:last-child {
+  border-bottom: none;
+}
+
+.note-type-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.tag-name {
+.note-type-dot.markdown { background: var(--text-primary); }
+.note-type-dot.bookmark { background: var(--accent-color); }
+.note-type-dot.snippet { background: var(--warning-color); }
+
+.note-row-info {
   flex: 1;
-  font-size: 0.875rem;
-  color: var(--text-primary);
-}
-
-.tag-count {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-}
-
-.nav-links {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 2px;
 }
 
-.nav-link {
+.note-row-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-row-preview {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-row-time {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* 侧栏 */
+.aside-section {
+  margin-bottom: var(--space-xl);
+}
+
+.aside-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-md);
+}
+
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quick-link {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
   color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
   transition: all var(--transition-fast);
+}
+
+.quick-link:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
   text-decoration: none;
 }
 
-.nav-link:hover {
+.aside-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.aside-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.aside-tag:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.nav-link span {
-  flex: 1;
+.aside-tag-count {
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
 }
 
-.nav-link .arrow {
-  font-size: 12px;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: all var(--transition-fast);
-}
-
-.nav-link:hover .arrow {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-/* 响应式 */
-@media (max-width: 1200px) {
-  .stats-section {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .main-sections {
-    grid-template-columns: 1fr;
-  }
-  
-  .sidebar-widgets {
-    flex-direction: row;
-  }
-  
-  .widget {
-    flex: 1;
-  }
-}
-
-@media (max-width: 768px) {
-  .welcome-section {
-    flex-direction: column;
-    text-align: center;
-    gap: var(--space-lg);
-  }
-  
-  .quick-actions {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  
-  .notes-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .sidebar-widgets {
-    flex-direction: column;
-  }
+@media (max-width: 900px) {
+  .home-body { grid-template-columns: 1fr; }
+  .stats-row { flex-wrap: wrap; }
 }
 </style>
