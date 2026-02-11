@@ -6,8 +6,17 @@ export const useFoldersStore = defineStore('folders', () => {
   // 状态
   const folders = ref<Folder[]>([])
   const currentFolder = ref<Folder | null>(null)
-  const expandedFolders = ref<Set<string>>(new Set())
+  
+  // 从 localStorage 恢复展开状态
+  const savedExpanded = localStorage.getItem('expandedFolders')
+  const expandedFolders = ref<Set<string>>(new Set(savedExpanded ? JSON.parse(savedExpanded) : []))
+  
   const loading = ref(false)
+
+  // 监听展开状态变化并保存
+  function saveExpandedState() {
+    localStorage.setItem('expandedFolders', JSON.stringify([...expandedFolders.value]))
+  }
 
   // 计算属性：构建树形结构
   const folderTree = computed(() => {
@@ -53,6 +62,10 @@ export const useFoldersStore = defineStore('folders', () => {
     const result = await window.api.folderCreate(folder)
     if (result.success && result.data) {
       folders.value.push(result.data)
+      // 默认展开新创建的文件夹的父级（如果存在）
+      if (folder.parentId) {
+         expandFolder(folder.parentId)
+      }
       return result.data
     }
     return null
@@ -77,6 +90,9 @@ export const useFoldersStore = defineStore('folders', () => {
       if (currentFolder.value?.id === id) {
         currentFolder.value = null
       }
+      // 从展开状态中移除
+      expandedFolders.value.delete(id)
+      saveExpandedState()
       return true
     }
     return false
@@ -92,14 +108,17 @@ export const useFoldersStore = defineStore('folders', () => {
     } else {
       expandedFolders.value.add(id)
     }
+    saveExpandedState()
   }
 
   function expandFolder(id: string) {
     expandedFolders.value.add(id)
+    saveExpandedState()
   }
 
   function collapseFolder(id: string) {
     expandedFolders.value.delete(id)
+    saveExpandedState()
   }
 
   function isExpanded(id: string) {

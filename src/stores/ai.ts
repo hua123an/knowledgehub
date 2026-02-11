@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { useNotesStore } from './notes'
+import { useTagsStore } from './tags'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -15,6 +17,9 @@ export interface Conversation {
 }
 
 export const useAIStore = defineStore('ai', () => {
+  const notesStore = useNotesStore()
+  const tagsStore = useTagsStore()
+
   // 状态
   const chatOpen = ref(false)
   const settingsOpen = ref(false)
@@ -22,6 +27,12 @@ export const useAIStore = defineStore('ai', () => {
   const streaming = ref(false)
   const streamContent = ref('')
   const error = ref('')
+  
+  // 当前激活的笔记上下文
+  const activeNoteContext = ref<{ id: string, title: string, content: string } | null>(null)
+  
+  // 本次回答参考的来源 (用于 UI 显示)
+  const lastReference = ref<string[]>([])
 
   // 当前对话
   const currentConversation = ref<Conversation>({
@@ -35,9 +46,9 @@ export const useAIStore = defineStore('ai', () => {
 
   // AI 配置
   const config = reactive({
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: 'gpt-3.5-turbo',
+    baseUrl: 'https://api.deepseek.com',
+    apiKey: 'sk-376363b4a79e4bb5ae5f329706efc0f4',
+    model: 'deepseek-chat',
   })
 
   // 配置是否已就绪
@@ -77,11 +88,18 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
+  // 设置当前激活笔记
+  function setActiveNote(note: { id: string, title: string, content: string } | null) {
+    activeNoteContext.value = note
+  }
+
   // 发送消息（流式）
   async function sendMessage(content: string, context?: string) {
     if (!content.trim() || loading.value) return
 
     error.value = ''
+    lastReference.value = [] // Reset references
+    
     const userMsg: ChatMessage = { role: 'user', content }
     currentConversation.value.messages.push(userMsg)
 
@@ -99,9 +117,128 @@ export const useAIStore = defineStore('ai', () => {
       content: m.content,
     }))
 
-    let systemPrompt = '你是一个智能知识库助手，帮助用户管理和理解他们的笔记、书签和代码片段。用中文回答。'
+     // 构建知识库概况 (Global Context)
+    const recentTitles = notesStore.notes
+      .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 5)
+      .map((n: any) => `《${n.title}》`)
+      .join('、')
+
+    const allTags = tagsStore.tags.map((t: any) => t.name).join('、')
+
+    // 构建完整笔记目录 — 让 AI 拥有全局视野 (ID + Title)
+    const notesCatalog = notesStore.notes
+      .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 200) // 增加到200条
+      .map((n: any) => `[ID:${n.id}] ${n.title}`)
+      .join('\n')
+    
+    let baseSystemPrompt = `你是一个智能知识库助手，帮助用户管理和理解他们的笔记。
+你拥有对整个知识库的读写权限，应当主动帮用户完成操作，禁止要求用户手动复制粘贴。
+
+【当前知识库概况】：
+- 笔记总数：${notesStore.notes.length} 篇
+- 最近修改：${recentTitles || '无'}
+- 所有标签：${allTags || '无'}
+
+【笔记目录 (前200篇)】：
+${notesCatalog || '(空知识库)'}
+
+【能力与指令】：
+你可以输出以下 JSON 动作：
+
+1. 创建笔记：
+:::action
+{ "type": "create_note", "data": { "title": "标题", "content": "内容", "folder_id": "可选文件夹ID" } }
+:::
+
+2. 打开笔记：
+:::action
+{ "type": "open_note", "data": { "id": "笔记ID", "title": "笔记标题" } }
+:::
+
+3. 删除笔记：
+:::action
+{ "type": "delete_note", "data": { "id": "笔记ID", "title": "笔记标题" } }
+:::
+
+4. 修改/整理笔记内容（直接覆盖写入，用户无需手动复制）：
+:::action
+{ "type": "update_note", "data": { "id": "笔记ID", "title": "笔记标题", "content": "整理后的Markdown内容" } }
+:::
+
+5. 创建文件夹：
+:::action
+{ "type": "create_folder", "data": { "name": "文件夹名" } }
+:::
+
+6. 添加标签：
+:::action
+{ "type": "add_tag", "data": { "id": "笔记ID", "title": "笔记标题", "tag_name": "标签名" } }
+:::
+
+7. 移除标签：
+:::action
+{ "type": "remove_tag", "data": { "id": "笔记ID", "title": "笔记标题", "tag_name": "标签名" } }
+:::
+
+8. 搜索/读取笔记全文（用于检索或读取具体内容）：
+:::action
+{ "type": "search_notes", "data": { "query": "关键词或标题" } }
+:::
+
+9. 移动笔记到文件夹：
+:::action
+{ "type": "move_note", "data": { "id": "笔记ID", "folder_id": "目标文件夹ID" } }
+:::
+
+10. 列出所有文件夹（获取文件夹结构和ID）：
+:::action
+{ "type": "list_folders", "data": {} }
+:::
+
+11. 批量操作（一次执行多个动作）：
+:::action
+{ "type": "batch", "data": { "actions": [ {"type":"update_note","data":{"id":"xxx","content":"整理后的内容"}} ] } }
+:::
+
+【重要行为准则】：
+- **主动权**：当用户说"整理一下"时，你应该先执行 list_folders 和 search_notes 了解全局，然后通过 batch 或连续的 update_note/move_note 直接完成，而不是提示用户去操作。
+- **获取 ID**：你可以从之前提供的【笔记目录】中获取笔记 ID。如果目录里没有，先使用 search_notes 查找。
+- **反馈闭环**：当你输出 search_notes 或 list_folders 时，系统会自动把结果作为对话下一轮的输入反馈给你。请在收到系统反馈后继续完成剩下的操作。
+- **避免复制粘贴**：永远优先使用 update_note 修改笔记，而不是让用户自己复制你的回答。
+- **多步操作**：你可以像一个真正的 Agent 一样思考，分步执行：查找 -> 分析 -> 修改 -> 整理。
+- 用中文回答。`
+
+    let systemPrompt = baseSystemPrompt
+    
     if (context) {
-      systemPrompt += `\n\n以下是当前的上下文内容，请基于此回答：\n${context}`
+      systemPrompt += `\n\n【上下文引用（用户选中）】：\n${context}`
+      lastReference.value.push('选中的文本')
+    } else if (activeNoteContext.value) {
+      // 优先使用当前打开的笔记，注入完整内容
+      const note = activeNoteContext.value
+      const safeContent = (note.content || '').slice(0, 6000)
+      systemPrompt += `\n\n【当前正在查看的笔记】：\nID: ${note.id}\n标题：《${note.title}》\n完整内容：\n${safeContent}\n\n指令：用户问题大概率与此笔记有关。如需修改此笔记，使用 update_note 并带上 ID "${note.id}"。`
+      lastReference.value.push(`当前笔记: ${note.title}`)
+    } else {
+      // RAG 搜索 — 扩大搜索范围和内容长度
+      try {
+        const searchResult = await window.api.noteSearch(content)
+        if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
+          const topNotes = searchResult.data.slice(0, 5)
+          const contextText = topNotes.map((n: any) => 
+            `ID: ${n.note.id}\n标题：《${n.note.title}》\n内容：\n${(n.note.content || '').slice(0, 1500)}`
+          ).join('\n---\n')
+          
+          if (contextText) {
+             systemPrompt += `\n\n【搜索到的相关笔记（含全文）】：\n${contextText}`
+             topNotes.forEach((n: any) => lastReference.value.push(n.note.title))
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
     }
 
     // 设置流式监听
@@ -365,8 +502,11 @@ export const useAIStore = defineStore('ai', () => {
     conversations,
     config,
     isConfigured,
+    activeNoteContext,
+    lastReference,
     // 对话操作
     sendMessage,
+    setActiveNote,
     stopGeneration,
     newConversation,
     switchConversation,

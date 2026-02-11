@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow } from "electron";
+import { app, ipcMain, BrowserWindow, dialog, shell } from "electron";
 import { createRequire as createRequire$1 } from "node:module";
 import { fileURLToPath } from "node:url";
 import path$1 from "node:path";
@@ -210,7 +210,12 @@ const IPC_CHANNELS = {
   AI_CHAT_HISTORY_LIST: "ai:chatHistoryList",
   AI_CHAT_HISTORY_GET: "ai:chatHistoryGet",
   AI_CHAT_HISTORY_SAVE: "ai:chatHistorySave",
-  AI_CHAT_HISTORY_DELETE: "ai:chatHistoryDelete"
+  AI_CHAT_HISTORY_DELETE: "ai:chatHistoryDelete",
+  // 系统
+  SYSTEM_REVEAL: "system:reveal"
+};
+const globalContext = {
+  currentWorkspace: null
 };
 function rowToNote(row) {
   return {
@@ -251,6 +256,16 @@ function registerNoteHandlers() {
         now
       );
       const created = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+      if (globalContext.currentWorkspace) {
+        const filename = `${created.title}.md`;
+        const filePath = path.join(globalContext.currentWorkspace, filename);
+        try {
+          fs.writeFileSync(filePath, created.content || "", "utf-8");
+          console.log("[Main] Created file:", filePath);
+        } catch (e) {
+          console.error("[Main] Create file failed:", e);
+        }
+      }
       return { success: true, data: rowToNote(created) };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -258,6 +273,10 @@ function registerNoteHandlers() {
   });
   ipcMain.handle(IPC_CHANNELS.NOTE_UPDATE, async (_event, id, updates) => {
     try {
+      const existing = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+      if (!existing) {
+        return { success: false, error: "Note not found" };
+      }
       const fields = [];
       const values = [];
       if (updates.title !== void 0) {
@@ -294,6 +313,29 @@ function registerNoteHandlers() {
       const stmt = db2.prepare(`UPDATE notes SET ${fields.join(", ")} WHERE id = ?`);
       stmt.run(...values);
       const updated = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+      if (globalContext.currentWorkspace && updated) {
+        const filename = `${updated.title}.md`;
+        const filePath = path.join(globalContext.currentWorkspace, filename);
+        if (updates.title !== void 0 && updates.title !== existing.title) {
+          const oldPath = path.join(globalContext.currentWorkspace, `${existing.title}.md`);
+          try {
+            if (fs.existsSync(oldPath)) {
+              fs.renameSync(oldPath, filePath);
+              console.log("[Main] Renamed file:", oldPath, "->", filePath);
+            }
+          } catch (e) {
+            console.error("[Main] Rename failed:", e);
+          }
+        }
+        if (updates.content !== void 0) {
+          try {
+            fs.writeFileSync(filePath, updates.content, "utf-8");
+            console.log("[Main] Saved file:", filePath);
+          } catch (e) {
+            console.error("[Main] Save failed:", e);
+          }
+        }
+      }
       return { success: true, data: rowToNote(updated) };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -301,6 +343,18 @@ function registerNoteHandlers() {
   });
   ipcMain.handle(IPC_CHANNELS.NOTE_DELETE, async (_event, id) => {
     try {
+      const existing = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+      if (globalContext.currentWorkspace && existing) {
+        const filePath = path.join(globalContext.currentWorkspace, `${existing.title}.md`);
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log("[Main] Deleted file:", filePath);
+          }
+        } catch (e) {
+          console.error("[Main] Delete file failed:", e);
+        }
+      }
       db2.prepare("DELETE FROM notes WHERE id = ?").run(id);
       return { success: true };
     } catch (error) {
@@ -346,23 +400,32 @@ function registerNoteHandlers() {
       if (!query || query.trim() === "") {
         return { success: true, data: [] };
       }
+      const searchTerm = `%${query}%`;
       const rows = db2.prepare(`
-        SELECT n.*, 
-               snippet(notes_fts, 0, '<mark>', '</mark>', '...', 32) as title_highlight,
-               snippet(notes_fts, 1, '<mark>', '</mark>', '...', 64) as content_highlight
-        FROM notes_fts fts
-        JOIN notes n ON n.rowid = fts.rowid
-        WHERE notes_fts MATCH ?
-        ORDER BY rank
+        SELECT * FROM notes 
+        WHERE title LIKE ? OR content LIKE ?
+        ORDER BY updated_at DESC
         LIMIT 50
-      `).all(query);
-      const results = rows.map((row) => ({
-        note: rowToNote(row),
-        highlights: [row.title_highlight, row.content_highlight].filter(Boolean),
-        score: 0
-      }));
+      `).all(searchTerm, searchTerm);
+      const results = rows.map((row) => {
+        let snippet = (row.content || "").slice(0, 150);
+        if (row.content && row.content.toLowerCase().includes(query.toLowerCase())) {
+          const idx = row.content.toLowerCase().indexOf(query.toLowerCase());
+          const start = Math.max(0, idx - 40);
+          const end = Math.min(row.content.length, idx + 80);
+          snippet = (start > 0 ? "..." : "") + row.content.slice(start, end) + (end < row.content.length ? "..." : "");
+        }
+        const matchField = row.title.toLowerCase().includes(query.toLowerCase()) ? "标题" : "内容";
+        return {
+          note: rowToNote(row),
+          matchField,
+          contentSnippet: snippet,
+          score: 0
+        };
+      });
       return { success: true, data: results };
     } catch (error) {
+      console.error("Search error:", error);
       return { success: false, error: String(error) };
     }
   });
@@ -659,14 +722,13 @@ function getAIConfig() {
     }
   });
   return {
-    baseUrl: config["ai_base_url"] || "https://api.openai.com/v1",
-    apiKey: config["ai_api_key"] || "",
-    model: config["ai_model"] || "gpt-3.5-turbo"
+    baseUrl: config["ai_base_url"] || "https://api.deepseek.com",
+    apiKey: config["ai_api_key"] || "sk-376363b4a79e4bb5ae5f329706efc0f4",
+    model: config["ai_model"] || "deepseek-chat"
   };
 }
 async function aiChat(messages, systemPrompt) {
   const config = getAIConfig();
-  if (!config.apiKey) throw new Error("请先在设置中配置 AI API Key");
   const allMessages = [];
   if (systemPrompt) {
     allMessages.push({ role: "system", content: systemPrompt });
@@ -718,10 +780,6 @@ async function aiChat(messages, systemPrompt) {
 }
 async function aiChatStream(messages, systemPrompt, onChunk, onDone, onError) {
   const config = getAIConfig();
-  if (!config.apiKey) {
-    onError("请先在设置中配置 AI API Key");
-    return;
-  }
   const allMessages = [];
   if (systemPrompt) {
     allMessages.push({ role: "system", content: systemPrompt });
@@ -971,6 +1029,59 @@ function registerAIHandlers() {
     }
   });
 }
+function registerDialogHandlers() {
+  ipcMain.handle("dialog:openDirectory", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"]
+    });
+    if (result.canceled) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+  ipcMain.handle("workspace:set", async (_event, workspacePath) => {
+    console.log("[Main] Setting workspace:", workspacePath);
+    globalContext.currentWorkspace = workspacePath;
+    try {
+      if (!fs.existsSync(workspacePath)) return false;
+      const db2 = getDatabase();
+      const files = fs.readdirSync(workspacePath);
+      const mdFiles = files.filter((f) => f.endsWith(".md"));
+      console.log(`[Main] Found ${mdFiles.length} markdown files to sync`);
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      for (const file of mdFiles) {
+        const title = path.basename(file, ".md");
+        const content = fs.readFileSync(path.join(workspacePath, file), "utf-8");
+        const existing = db2.prepare("SELECT id FROM notes WHERE title = ?").get(title);
+        if (!existing) {
+          const id = v4();
+          db2.prepare(`
+            INSERT INTO notes (id, title, content, type, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(id, title, content, "markdown", now, now);
+          console.log(`[Main] Imported note: ${title}`);
+        } else {
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error("[Main] Sync failed:", e);
+      return false;
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_REVEAL, async (_event, filePath) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        shell.showItemInFolder(filePath);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("[Main] Reveal failed:", e);
+      return false;
+    }
+  });
+}
 function registerAllHandlers() {
   registerNoteHandlers();
   registerFolderHandlers();
@@ -978,6 +1089,7 @@ function registerAllHandlers() {
   registerLinkHandlers();
   registerSettingsHandlers();
   registerAIHandlers();
+  registerDialogHandlers();
 }
 createRequire$1(import.meta.url);
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));

@@ -14,6 +14,11 @@ const api = {
   folderUpdate: (id: string, updates: any) => ipcRenderer.invoke('folder:update', id, updates),
   folderDelete: (id: string) => ipcRenderer.invoke('folder:delete', id),
   folderList: () => ipcRenderer.invoke('folder:list'),
+  
+  // 系统/文件操作
+  openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+  setWorkspace: (path: string) => ipcRenderer.invoke('workspace:set', path),
+  revealInExplorer: (path: string) => ipcRenderer.invoke('system:reveal', path),
 
   // 标签操作
   tagCreate: (tag: any) => ipcRenderer.invoke('tag:create', tag),

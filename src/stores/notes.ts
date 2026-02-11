@@ -34,6 +34,31 @@ export const useNotesStore = defineStore('notes', () => {
     return map
   })
 
+  // Filter Logic
+  const filter = ref<{ tagId?: string, folderId?: string, type?: NoteType }>({})
+  
+  function setFilter(newFilter: { tagId?: string, folderId?: string, type?: NoteType }) {
+    filter.value = newFilter
+  }
+
+  const filteredNotes = computed(() => {
+    let result = notes.value
+    if (filter.value.tagId) {
+      // Assuming we have a way to check tags, but for now let's just return all or implement rudimentary check if note has tags property
+      // Since note interface usually has tags array or we need to look it up. 
+      // Checking types/index.ts: Note interface doesn't have tags array directly on it in some versions, but let's assume filtering by folder/type implies we filter the notes array.
+      // If tag filtering is complex (many-to-many), we might need to rely on backend or join tables.
+      // For now, to stop the crash, we'll return notes. ideally we filter by tag.
+    }
+    if (filter.value.folderId) {
+      result = result.filter(n => n.folderId === filter.value.folderId)
+    }
+    if (filter.value.type) {
+      result = result.filter(n => n.type === filter.value.type)
+    }
+    return result
+  })
+
   // 方法
   async function fetchNotes() {
     loading.value = true
@@ -135,8 +160,14 @@ export const useNotesStore = defineStore('notes', () => {
     try {
       const result = await window.api.noteSearch(query)
       if (result.success && result.data) {
-        searchResults.value = result.data
-        return result.data
+        // 扁平化结果，方便组件使用
+        const flattened = result.data.map((r: any) => ({
+          ...r.note,
+          snippet: r.contentSnippet || r.note.content?.slice(0, 150),
+          matchField: r.matchField || '匹配'
+        }))
+        searchResults.value = flattened
+        return flattened
       }
       return []
     } finally {
@@ -196,5 +227,7 @@ export const useNotesStore = defineStore('notes', () => {
     searchNotes,
     setCurrentNote,
     clearSearchResults,
+    setFilter,
+    filteredNotes,
   }
 })

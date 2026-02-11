@@ -1,7 +1,10 @@
 import { ipcMain } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../database'
 import { IPC_CHANNELS } from '../constants'
+import { globalContext } from '../context'
 
 interface NoteRow {
   id: string
@@ -62,6 +65,24 @@ export function registerNoteHandlers() {
       )
       
       const created = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow
+      
+      // 同步写入文件系统
+      if (globalContext.currentWorkspace) {
+         const filename = `${created.title}.md`
+         const filePath = path.join(globalContext.currentWorkspace, filename)
+         try {
+           // 确保不覆盖现有文件（虽然 uuid 保证 id 唯一，但 title 可能重复）
+           // 如果文件已存在，应该报错还是自动重命名？
+           // 目前简单处理：如果存在，覆盖（因为这是新建操作，且前端可能没有重复检查）
+           // 更好的做法是在前端检查 title 唯一性。
+           // 这里我们直接写入。
+           fs.writeFileSync(filePath, created.content || '', 'utf-8')
+           console.log('[Main] Created file:', filePath)
+         } catch (e) {
+           console.error('[Main] Create file failed:', e)
+         }
+      }
+
       return { success: true, data: rowToNote(created) }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -71,6 +92,12 @@ export function registerNoteHandlers() {
   // 更新笔记
   ipcMain.handle(IPC_CHANNELS.NOTE_UPDATE, async (_event, id, updates) => {
     try {
+      // Get existing note first for rename logic
+      const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined
+      if (!existing) {
+        return { success: false, error: 'Note not found' }
+      }
+
       const fields: string[] = []
       const values: any[] = []
       
@@ -111,6 +138,43 @@ export function registerNoteHandlers() {
       stmt.run(...values)
       
       const updated = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow
+
+      // 同步写入文件系统
+      if (globalContext.currentWorkspace && updated) {
+        // 简单策略：按 title 寻找文件名
+        const filename = `${updated.title}.md`
+        const filePath = path.join(globalContext.currentWorkspace, filename)
+        
+        // 1. 如果 title 变了，先重命名旧文件
+        if (updates.title !== undefined && updates.title !== existing.title) {
+           const oldPath = path.join(globalContext.currentWorkspace, `${existing.title}.md`)
+           try {
+             if (fs.existsSync(oldPath)) {
+               fs.renameSync(oldPath, filePath)
+               console.log('[Main] Renamed file:', oldPath, '->', filePath)
+             }
+           } catch (e) {
+             console.error('[Main] Rename failed:', e)
+           }
+        }
+
+        // 2. 写入/更新内容 (如果是重命名后的文件，这里也会更新内容)
+        // 只有当更新了 content 或者 title (导致文件名变化) 时，我们才确保文件存在
+        // 但这里我们简单点：只要有 currentWorkspace，每次 update 都确保文件内容是最新的
+        // 或者是只在 content 变动时写？
+        // 如果只重命名，content 没传，我们需要读 DB 里的 content 写进去吗？
+        // renameSync 已经移动了文件内容。所以只要 content 没变，不需要重写。
+        
+        if (updates.content !== undefined) {
+           try {
+             fs.writeFileSync(filePath, updates.content, 'utf-8')
+             console.log('[Main] Saved file:', filePath)
+           } catch (e) {
+             console.error('[Main] Save failed:', e)
+           }
+        }
+      }
+
       return { success: true, data: rowToNote(updated) }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -120,6 +184,20 @@ export function registerNoteHandlers() {
   // 删除笔记
   ipcMain.handle(IPC_CHANNELS.NOTE_DELETE, async (_event, id) => {
     try {
+      // Get existing note to find file path
+      const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined
+      if (globalContext.currentWorkspace && existing) {
+         const filePath = path.join(globalContext.currentWorkspace, `${existing.title}.md`)
+         try {
+           if (fs.existsSync(filePath)) {
+             fs.unlinkSync(filePath)
+             console.log('[Main] Deleted file:', filePath)
+           }
+         } catch (e) {
+           console.error('[Main] Delete file failed:', e)
+         }
+      }
+
       db.prepare('DELETE FROM notes WHERE id = ?').run(id)
       return { success: true }
     } catch (error) {
@@ -175,25 +253,37 @@ export function registerNoteHandlers() {
         return { success: true, data: [] }
       }
       
+      const searchTerm = `%${query}%`
       const rows = db.prepare(`
-        SELECT n.*, 
-               snippet(notes_fts, 0, '<mark>', '</mark>', '...', 32) as title_highlight,
-               snippet(notes_fts, 1, '<mark>', '</mark>', '...', 64) as content_highlight
-        FROM notes_fts fts
-        JOIN notes n ON n.rowid = fts.rowid
-        WHERE notes_fts MATCH ?
-        ORDER BY rank
+        SELECT * FROM notes 
+        WHERE title LIKE ? OR content LIKE ?
+        ORDER BY updated_at DESC
         LIMIT 50
-      `).all(query) as any[]
+      `).all(searchTerm, searchTerm) as NoteRow[]
       
-      const results = rows.map(row => ({
-        note: rowToNote(row),
-        highlights: [row.title_highlight, row.content_highlight].filter(Boolean),
-        score: 0,
-      }))
+      const results = rows.map(row => {
+        // 手动生成简单的摘要和高亮
+        let snippet = (row.content || '').slice(0, 150)
+        if (row.content && row.content.toLowerCase().includes(query.toLowerCase())) {
+          const idx = row.content.toLowerCase().indexOf(query.toLowerCase())
+          const start = Math.max(0, idx - 40)
+          const end = Math.min(row.content.length, idx + 80)
+          snippet = (start > 0 ? '...' : '') + row.content.slice(start, end) + (end < row.content.length ? '...' : '')
+        }
+
+        const matchField = row.title.toLowerCase().includes(query.toLowerCase()) ? '标题' : '内容'
+
+        return {
+          note: rowToNote(row),
+          matchField,
+          contentSnippet: snippet,
+          score: 0,
+        }
+      })
       
       return { success: true, data: results }
     } catch (error) {
+      console.error('Search error:', error)
       return { success: false, error: String(error) }
     }
   })

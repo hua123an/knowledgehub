@@ -5,9 +5,19 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
-import AppLayout from './components/common/AppLayout.vue'
+import AppLayout from '@/components/common/AppLayout.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
+
+const workspaceStore = useWorkspaceStore()
+
+onMounted(() => {
+  if (workspaceStore.init) {
+    workspaceStore.init()
+  }
+})
 </script>
 
 <style>

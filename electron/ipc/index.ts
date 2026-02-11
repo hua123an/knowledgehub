@@ -5,6 +5,8 @@ import { registerLinkHandlers } from './links'
 import { registerSettingsHandlers } from './settings'
 import { registerAIHandlers } from '../ai'
 
+import { registerDialogHandlers } from './dialog'
+
 export function registerAllHandlers() {
   registerNoteHandlers()
   registerFolderHandlers()
@@ -12,4 +14,5 @@ export function registerAllHandlers() {
   registerLinkHandlers()
   registerSettingsHandlers()
   registerAIHandlers()
+  registerDialogHandlers()
 }

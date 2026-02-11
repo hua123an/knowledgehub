@@ -57,4 +57,7 @@ export const IPC_CHANNELS = {
   AI_CHAT_HISTORY_GET: 'ai:chatHistoryGet',
   AI_CHAT_HISTORY_SAVE: 'ai:chatHistorySave',
   AI_CHAT_HISTORY_DELETE: 'ai:chatHistoryDelete',
+  // 系统
+  SYSTEM_REVEAL: 'system:reveal',
 } as const
+

@@ -13,6 +13,10 @@ const api = {
   folderUpdate: (id, updates) => electron.ipcRenderer.invoke("folder:update", id, updates),
   folderDelete: (id) => electron.ipcRenderer.invoke("folder:delete", id),
   folderList: () => electron.ipcRenderer.invoke("folder:list"),
+  // 系统/文件操作
+  openDirectory: () => electron.ipcRenderer.invoke("dialog:openDirectory"),
+  setWorkspace: (path) => electron.ipcRenderer.invoke("workspace:set", path),
+  revealInExplorer: (path) => electron.ipcRenderer.invoke("system:reveal", path),
   // 标签操作
   tagCreate: (tag) => electron.ipcRenderer.invoke("tag:create", tag),
   tagUpdate: (id, updates) => electron.ipcRenderer.invoke("tag:update", id, updates),

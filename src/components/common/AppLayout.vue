@@ -5,7 +5,7 @@
       <!-- Logo -->
       <div class="sidebar-header titlebar-drag-region">
         <div class="logo titlebar-no-drag" @click="router.push('/')">
-          <span class="logo-mark">K</span>
+          <img src="/logo.png" class="logo-img" alt="KnowledgeHub Logo" />
           <span v-if="!sidebarCollapsed" class="logo-text">KnowledgeHub</span>
         </div>
         <button v-if="!sidebarCollapsed" class="icon-btn titlebar-no-drag" @click="toggleSidebar">
@@ -15,10 +15,52 @@
 
       <!-- 搜索 -->
       <div class="sidebar-search" v-if="!sidebarCollapsed">
-        <div class="search-box" @click="router.push('/search')">
-          <el-icon><Search /></el-icon>
-          <span>搜索...</span>
-          <kbd>⌘K</kbd>
+        <div class="search-box-wrapper">
+          <el-popover
+            v-model:visible="showSearchDropdown"
+            placement="bottom-start"
+            :width="280"
+            trigger="manual"
+            popper-class="search-results-popper"
+          >
+            <template #reference>
+              <el-input
+                ref="searchInputRef"
+                v-model="sidebarSearchText"
+                placeholder="搜索笔记内容..."
+                prefix-icon="Search"
+                @input="handleInputSearch"
+                @keydown.enter="handleEnterSearch"
+                @focus="handleSearchFocus"
+                @blur="handleSearchBlur"
+                class="global-search-input"
+                clearable
+                size="default"
+              >
+                <template #suffix>
+                  <kbd class="shortcut-hint">⌘K</kbd>
+                </template>
+              </el-input>
+            </template>
+            
+            <div class="search-results-dropdown">
+              <div v-if="isSearching" class="search-loading">
+                <el-icon class="is-loading"><Loading /></el-icon> 正在搜索...
+              </div>
+              <template v-else-if="quickSearchResults.length">
+                <div 
+                  v-for="res in quickSearchResults" 
+                  :key="res.id" 
+                  class="search-result-item"
+                  @mousedown="selectSearchResult(res.id)"
+                >
+                  <div class="res-title" v-html="highlightText(res.title, sidebarSearchText)"></div>
+                  <div class="res-snippet" v-html="highlightText(res.snippet, sidebarSearchText)"></div>
+                </div>
+              </template>
+              <div v-else class="search-empty">未找到相关内容</div>
+            </div>
+          </el-popover>
         </div>
       </div>
 
@@ -28,36 +70,15 @@
           <el-icon><HomeFilled /></el-icon>
           <span v-if="!sidebarCollapsed">首页</span>
         </router-link>
-        <router-link to="/search" class="nav-item" :class="{ active: route.path === '/search' }">
-          <el-icon><Search /></el-icon>
-          <span v-if="!sidebarCollapsed">搜索</span>
-        </router-link>
         <router-link to="/graph" class="nav-item" :class="{ active: route.path === '/graph' }">
           <el-icon><Share /></el-icon>
           <span v-if="!sidebarCollapsed">图谱</span>
         </router-link>
       </nav>
 
-      <!-- 新建按钮 -->
-      <div class="sidebar-create" v-if="!sidebarCollapsed">
-        <button class="create-btn" @click="createNote('markdown')">
-          <el-icon><Plus /></el-icon>
-          新建笔记
-        </button>
-      </div>
-
-      <!-- Tab 切换 -->
-      <div class="sidebar-tabs" v-if="!sidebarCollapsed">
-        <button class="tab-btn" :class="{ active: activeTab === 'folders' }" @click="activeTab = 'folders'">文件夹</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'tags' }" @click="activeTab = 'tags'">标签</button>
-        <button class="tab-btn" :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">最近</button>
-      </div>
-
-      <!-- 内容 -->
+      <!-- 资源管理器 (合并了文件/标签/最近) -->
       <div class="sidebar-content" v-if="!sidebarCollapsed">
-        <FolderTree v-if="activeTab === 'folders'" />
-        <TagCloud v-else-if="activeTab === 'tags'" />
-        <NoteList v-else-if="activeTab === 'recent'" :limit="10" />
+        <SidebarExplorer :filterText="sidebarSearchText" />
       </div>
 
       <!-- 底部 -->
@@ -98,16 +119,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  HomeFilled, Search, Share, Plus, Setting, Fold, Expand
+  HomeFilled, Share, Setting, Fold, Expand, Loading
 } from '@element-plus/icons-vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useNotesStore } from '@/stores/notes'
 import { useFoldersStore } from '@/stores/folders'
 import { useTagsStore } from '@/stores/tags'
 import { useAIStore } from '@/stores/ai'
-import FolderTree from '@/components/sidebar/FolderTree.vue'
-import TagCloud from '@/components/sidebar/TagCloud.vue'
-import NoteList from '@/components/sidebar/NoteList.vue'
+import SidebarExplorer from './SidebarExplorer.vue'
 import ThemeSwitch from '@/components/common/ThemeSwitch.vue'
 import AIChatPanel from '@/components/ai/AIChatPanel.vue'
 import AISettings from '@/components/ai/AISettings.vue'
@@ -121,8 +140,67 @@ const tagsStore = useTagsStore()
 const aiStore = useAIStore()
 
 const sidebarCollapsed = ref(false)
-const activeTab = ref<'folders' | 'tags' | 'recent'>('folders')
 const showSettings = ref(false)
+const sidebarSearchText = ref('')
+const searchInputRef = ref<any>(null)
+const showSearchDropdown = ref(false)
+const quickSearchResults = ref<any[]>([])
+const isSearching = ref(false)
+let searchBatchTimer: any = null
+
+function handleSearchFocus() {
+  if (sidebarSearchText.value.trim()) {
+    showSearchDropdown.value = true
+  }
+}
+
+function handleSearchBlur() {
+  // 延迟关闭，确保点击事件能触发
+  setTimeout(() => {
+    showSearchDropdown.value = false
+  }, 200)
+}
+
+function handleInputSearch() {
+  const query = sidebarSearchText.value.trim()
+  if (!query) {
+    showSearchDropdown.value = false
+    quickSearchResults.value = []
+    return
+  }
+  
+  showSearchDropdown.value = true
+  isSearching.value = true
+  
+  if (searchBatchTimer) clearTimeout(searchBatchTimer)
+  searchBatchTimer = setTimeout(async () => {
+    try {
+      const results = await notesStore.searchNotes(query)
+      quickSearchResults.value = results.slice(0, 6) // 快搜只取前6
+    } finally {
+      isSearching.value = false
+    }
+  }, 300)
+}
+
+function handleEnterSearch() {
+  showSearchDropdown.value = false
+  if (sidebarSearchText.value) {
+    router.push({ path: '/search', query: { q: sidebarSearchText.value } })
+  }
+}
+
+function selectSearchResult(id: string) {
+  showSearchDropdown.value = false
+  router.push(`/editor/${id}`)
+}
+
+function highlightText(text: string, query: string) {
+  if (!text || !query) return text || ''
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escapedQuery})`, 'gi')
+  return text.replace(regex, '<mark>$1</mark>')
+}
 
 const isDark = computed(() => settingsStore.settings.theme === 'dark')
 
@@ -134,17 +212,15 @@ function toggleAIChat() {
   aiStore.chatOpen = !aiStore.chatOpen
 }
 
-async function createNote(type: 'markdown' | 'bookmark' | 'snippet') {
-  const note = await notesStore.createNote({
-    title: type === 'markdown' ? '新笔记' : type === 'bookmark' ? '新书签' : '新代码片段',
-    type,
-    content: '',
-    folderId: foldersStore.currentFolder?.id || null,
-  })
-  if (note) router.push(`/editor/${note.id}`)
-}
-
 onMounted(async () => {
+  // 快捷键支持
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault()
+      searchInputRef.value?.focus()
+    }
+  })
+
   await Promise.all([
     foldersStore.fetchFolders(),
     tagsStore.fetchTags(),
@@ -184,28 +260,40 @@ onMounted(async () => {
 }
 
 .logo { display: flex; align-items: center; gap: var(--space-sm); cursor: pointer; }
-.logo-mark {
+.logo-img {
   width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--text-primary); color: var(--bg-primary);
-  border-radius: var(--radius-sm); font-size: 0.8125rem; font-weight: 700;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  background: var(--text-primary);
 }
 .logo-text { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
 
-.sidebar-search { padding: var(--space-sm) var(--space-md); }
-.search-box {
-  display: flex; align-items: center; gap: var(--space-sm);
-  padding: 6px var(--space-md);
-  background: var(--bg-primary); border: 1px solid var(--border-color);
-  border-radius: var(--radius-md); color: var(--text-tertiary);
-  font-size: 0.8125rem; cursor: pointer;
+.sidebar-search { padding: 0 16px 12px; }
+
+.search-box-wrapper .global-search-input {
+  --el-input-bg-color: var(--bg-secondary);
+  --el-input-border-color: transparent;
+  --el-input-hover-border-color: var(--border-color);
+  --el-input-focus-border-color: var(--text-primary);
 }
-.search-box:hover { border-color: var(--text-tertiary); }
-.search-box span { flex: 1; }
-.search-box kbd {
-  font-family: inherit; font-size: 0.6875rem;
-  padding: 1px 5px; background: var(--bg-tertiary);
-  border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-tertiary);
+.search-box-wrapper :deep(.el-input__wrapper) {
+  padding-left: 8px;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+}
+.search-box-wrapper :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--text-primary);
+}
+
+.shortcut-hint {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding: 2px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  line-height: 1;
 }
 
 .sidebar-nav { padding: var(--space-xs) var(--space-sm); display: flex; flex-direction: column; gap: 1px; }
@@ -243,6 +331,57 @@ onMounted(async () => {
 .sidebar.collapsed .sidebar-footer { justify-content: center; }
 
 .main-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* 搜索下拉框样式 */
+.search-results-dropdown {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.search-result-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.search-result-item:hover {
+  background: var(--bg-hover);
+}
+
+.res-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.res-snippet {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(.search-result-item mark) {
+  background: transparent;
+  color: var(--text-primary);
+  text-decoration: underline;
+  font-weight: 600;
+  padding: 0;
+}
+
+.search-loading, .search-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
 
 /* AI 浮动按钮 */
 .ai-fab {

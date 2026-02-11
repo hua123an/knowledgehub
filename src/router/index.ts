@@ -10,7 +10,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/editor/:id?',
     name: 'editor',
-    component: () => import('../views/Editor.vue'),
+    component: () => import('../views/EditorV2.vue'),
+    props: true,
+  },
+  {
+    path: '/editor-legacy/:id?',
+    name: 'editor-legacy',
+    component: () => import('../views/EditorLegacy.vue'),
     props: true,
   },
   {
@@ -23,11 +29,37 @@ const routes: RouteRecordRaw[] = [
     name: 'graph',
     component: () => import('../views/Graph.vue'),
   },
+  {
+    path: '/welcome',
+    name: 'welcome',
+    component: () => import('../views/Welcome.vue'),
+  },
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
+})
+
+router.beforeEach((to, from, next) => {
+  // Use store inside guard to ensure pinia is active
+  // We need to import useWorkspaceStore here or assume it's available?
+  // It's better to verify logic. Since Pinia is installed in main, we can use it here.
+  // BUT: Cyclic dependency might occur if store imports router.
+  // Safe way: dynamic import or accessing pinia instance if needed.
+  // Actually, standard way is fine as long as router is used after app.use(pinia).
+  
+  // Checking local storage directly for speed/simplicity before store hydration completed?
+  // Or just trusting store. Let's try store.
+  const storedWorkspace =localStorage.getItem('currentWorkspace')
+  
+  if (!storedWorkspace && to.path !== '/welcome') {
+    next('/welcome')
+  } else if (storedWorkspace && to.path === '/welcome') {
+    next('/')
+  } else {
+    next()
+  }
 })
 
 export default router

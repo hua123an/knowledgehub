@@ -24,9 +24,9 @@ function getAIConfig(): AIConfig {
     try { config[r.key] = JSON.parse(r.value) } catch { config[r.key] = r.value }
   })
   return {
-    baseUrl: config['ai_base_url'] || 'https://api.openai.com/v1',
-    apiKey: config['ai_api_key'] || '',
-    model: config['ai_model'] || 'gpt-3.5-turbo',
+    baseUrl: config['ai_base_url'] || 'https://api.deepseek.com',
+    apiKey: config['ai_api_key'] || 'sk-376363b4a79e4bb5ae5f329706efc0f4',
+    model: config['ai_model'] || 'deepseek-chat',
   }
 }
 
