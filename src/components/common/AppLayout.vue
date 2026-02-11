@@ -48,21 +48,9 @@
 
       <!-- Tab 切换 -->
       <div class="sidebar-tabs" v-if="!sidebarCollapsed">
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'folders' }"
-          @click="activeTab = 'folders'"
-        >文件夹</button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'tags' }"
-          @click="activeTab = 'tags'"
-        >标签</button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'recent' }"
-          @click="activeTab = 'recent'"
-        >最近</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'folders' }" @click="activeTab = 'folders'">文件夹</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'tags' }" @click="activeTab = 'tags'">标签</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">最近</button>
       </div>
 
       <!-- 内容 -->
@@ -79,7 +67,7 @@
         </button>
         <template v-else>
           <ThemeSwitch />
-          <button class="icon-btn" title="设置">
+          <button class="icon-btn" title="设置" @click="showSettings = true">
             <el-icon><Setting /></el-icon>
           </button>
         </template>
@@ -92,6 +80,17 @@
         <component :is="Component" />
       </router-view>
     </main>
+
+    <!-- AI 浮动按钮 -->
+    <button class="ai-fab" @click="toggleAIChat" :class="{ active: aiStore.chatOpen }">
+      AI
+    </button>
+
+    <!-- AI 聊天面板 -->
+    <AIChatPanel v-if="aiStore.chatOpen" />
+
+    <!-- AI 设置弹窗 -->
+    <AISettings v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
@@ -105,10 +104,13 @@ import { useSettingsStore } from '@/stores/settings'
 import { useNotesStore } from '@/stores/notes'
 import { useFoldersStore } from '@/stores/folders'
 import { useTagsStore } from '@/stores/tags'
+import { useAIStore } from '@/stores/ai'
 import FolderTree from '@/components/sidebar/FolderTree.vue'
 import TagCloud from '@/components/sidebar/TagCloud.vue'
 import NoteList from '@/components/sidebar/NoteList.vue'
 import ThemeSwitch from '@/components/common/ThemeSwitch.vue'
+import AIChatPanel from '@/components/ai/AIChatPanel.vue'
+import AISettings from '@/components/ai/AISettings.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -116,14 +118,20 @@ const settingsStore = useSettingsStore()
 const notesStore = useNotesStore()
 const foldersStore = useFoldersStore()
 const tagsStore = useTagsStore()
+const aiStore = useAIStore()
 
 const sidebarCollapsed = ref(false)
 const activeTab = ref<'folders' | 'tags' | 'recent'>('folders')
+const showSettings = ref(false)
 
 const isDark = computed(() => settingsStore.settings.theme === 'dark')
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+function toggleAIChat() {
+  aiStore.chatOpen = !aiStore.chatOpen
 }
 
 async function createNote(type: 'markdown' | 'bookmark' | 'snippet') {
@@ -143,6 +151,9 @@ onMounted(async () => {
     notesStore.fetchNotes(),
     settingsStore.fetchSettings(),
   ])
+  // 加载 AI 配置
+  await aiStore.loadConfig()
+  await aiStore.loadConversations()
 })
 </script>
 
@@ -162,12 +173,8 @@ onMounted(async () => {
   transition: width var(--transition-normal);
   overflow: hidden;
 }
+.sidebar.collapsed { width: var(--sidebar-collapsed-width); }
 
-.sidebar.collapsed {
-  width: var(--sidebar-collapsed-width);
-}
-
-/* Logo */
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -176,182 +183,87 @@ onMounted(async () => {
   padding-top: 36px;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  cursor: pointer;
+.logo { display: flex; align-items: center; gap: var(--space-sm); cursor: pointer; }
+.logo-mark {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--text-primary); color: var(--bg-primary);
+  border-radius: var(--radius-sm); font-size: 0.8125rem; font-weight: 700;
+}
+.logo-text { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+
+.sidebar-search { padding: var(--space-sm) var(--space-md); }
+.search-box {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  background: var(--bg-primary); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); color: var(--text-tertiary);
+  font-size: 0.8125rem; cursor: pointer;
+}
+.search-box:hover { border-color: var(--text-tertiary); }
+.search-box span { flex: 1; }
+.search-box kbd {
+  font-family: inherit; font-size: 0.6875rem;
+  padding: 1px 5px; background: var(--bg-tertiary);
+  border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-tertiary);
 }
 
-.logo-mark {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.sidebar-nav { padding: var(--space-xs) var(--space-sm); display: flex; flex-direction: column; gap: 1px; }
+.nav-item {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 6px var(--space-md); border-radius: var(--radius-md);
+  color: var(--text-secondary); text-decoration: none; font-size: 0.8125rem;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--bg-hover); color: var(--text-primary); font-weight: 500; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: 6px; }
+
+.sidebar-create { padding: var(--space-sm) var(--space-md); }
+.create-btn {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-sm);
+  width: 100%; padding: 6px; font-size: 0.8125rem; font-weight: 500;
+  color: var(--text-secondary); border: 1px dashed var(--border-color); border-radius: var(--radius-md);
+}
+.create-btn:hover { border-color: var(--text-tertiary); color: var(--text-primary); background: var(--bg-hover); }
+
+.sidebar-tabs { display: flex; padding: var(--space-xs) var(--space-md); border-bottom: 1px solid var(--border-color); }
+.tab-btn {
+  flex: 1; padding: 6px 0; font-size: 0.75rem; color: var(--text-tertiary);
+  border-bottom: 2px solid transparent;
+}
+.tab-btn:hover { color: var(--text-secondary); }
+.tab-btn.active { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+
+.sidebar-content { flex: 1; overflow-y: auto; padding: var(--space-sm); }
+
+.sidebar-footer {
+  padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border-color);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar.collapsed .sidebar-footer { justify-content: center; }
+
+.main-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* AI 浮动按钮 */
+.ai-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   background: var(--text-primary);
   color: var(--bg-primary);
-  border-radius: var(--radius-sm);
   font-size: 0.8125rem;
   font-weight: 700;
-}
-
-.logo-text {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* 搜索 */
-.sidebar-search {
-  padding: var(--space-sm) var(--space-md);
-}
-
-.search-box {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: 6px var(--space-md);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-tertiary);
-  font-size: 0.8125rem;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  z-index: 1000;
+  transition: all 0.2s;
 }
-
-.search-box:hover {
-  border-color: var(--text-tertiary);
-}
-
-.search-box span {
-  flex: 1;
-}
-
-.search-box kbd {
-  font-family: inherit;
-  font-size: 0.6875rem;
-  padding: 1px 5px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  color: var(--text-tertiary);
-}
-
-/* 导航 */
-.sidebar-nav {
-  padding: var(--space-xs) var(--space-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 6px var(--space-md);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 0.8125rem;
-  transition: all var(--transition-fast);
-}
-
-.nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.nav-item.active {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.sidebar.collapsed .nav-item {
-  justify-content: center;
-  padding: 6px;
-}
-
-/* 新建 */
-.sidebar-create {
-  padding: var(--space-sm) var(--space-md);
-}
-
-.create-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  width: 100%;
-  padding: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
-}
-
-.create-btn:hover {
-  border-color: var(--text-tertiary);
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-/* Tab */
-.sidebar-tabs {
-  display: flex;
-  padding: var(--space-xs) var(--space-md);
-  gap: 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 6px 0;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  border-bottom: 2px solid transparent;
-  transition: all var(--transition-fast);
-}
-
-.tab-btn:hover {
-  color: var(--text-secondary);
-}
-
-.tab-btn.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--text-primary);
-}
-
-/* 内容 */
-.sidebar-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-sm);
-}
-
-/* 底部 */
-.sidebar-footer {
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sidebar.collapsed .sidebar-footer {
-  justify-content: center;
-}
-
-/* 主内容 */
-.main-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
+.ai-fab:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); }
+.ai-fab.active { background: var(--accent-color); color: #fff; }
 </style>

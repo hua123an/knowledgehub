@@ -1,213 +1,178 @@
 <template>
   <div class="search-view">
-    <header class="search-header">
-      <div class="search-bar">
-        <el-icon class="search-icon"><Search /></el-icon>
-        <input
-          v-model="searchQuery"
-          class="search-input"
-          placeholder="搜索笔记、书签、代码..."
-          autofocus
-          @input="handleSearch"
-        />
-        <button v-if="searchQuery" class="clear-btn" @click="clearSearch">
-          <el-icon><Close /></el-icon>
-        </button>
-      </div>
-
-      <div class="filters">
+    <div class="search-bar">
+      <el-input
+        v-model="query"
+        placeholder="搜索笔记..."
+        :prefix-icon="SearchIcon"
+        clearable
+        @input="handleSearch"
+        size="large"
+      />
+      <div class="search-filters">
         <button
-          v-for="t in noteTypes" :key="t.value"
-          class="filter-btn" :class="{ active: filterType === t.value }"
-          @click="filterType = t.value"
-        >{{ t.label }}</button>
-
-        <el-select v-model="filterTagId" placeholder="标签" clearable size="small" style="width: 120px">
-          <el-option v-for="tag in tagsStore.tags" :key="tag.id" :label="tag.name" :value="tag.id" />
-        </el-select>
+          v-for="f in filters"
+          :key="f.value"
+          class="filter-btn"
+          :class="{ active: activeFilter === f.value }"
+          @click="activeFilter = f.value; handleSearch()"
+        >{{ f.label }}</button>
       </div>
-    </header>
+    </div>
 
-    <div class="search-body">
-      <div v-if="!searchQuery && !filterType && !filterTagId" class="empty-hint">
-        输入关键词开始搜索
-      </div>
+    <!-- AI 搜索建议 -->
+    <div v-if="aiSuggestions.length && !results.length" class="ai-suggestions">
+      <span class="ai-suggestions-label">AI 建议搜索：</span>
+      <button v-for="s in aiSuggestions" :key="s" class="ai-suggestion" @click="query = s; handleSearch()">{{ s }}</button>
+    </div>
 
-      <div v-else-if="filteredResults.length === 0" class="empty-hint">
-        没有找到结果
-      </div>
-
-      <div v-else class="results">
-        <p class="results-count">{{ filteredResults.length }} 个结果</p>
-        <div
-          v-for="note in filteredResults" :key="note.id"
-          class="result-item"
-          @click="router.push(`/editor/${note.id}`)"
-        >
-          <div class="result-dot" :class="note.type"></div>
-          <div class="result-info">
-            <div class="result-title" v-html="highlight(note.title)"></div>
-            <div class="result-preview" v-html="highlight(getPreview(note))"></div>
-          </div>
-          <span class="result-time">{{ formatTime(note.updatedAt) }}</span>
+    <div class="search-results" v-if="results.length">
+      <p class="result-count">找到 {{ results.length }} 条结果</p>
+      <div
+        v-for="item in results"
+        :key="item.id"
+        class="result-item"
+        @click="openNote(item.id)"
+      >
+        <div class="result-title">{{ item.title }}</div>
+        <div class="result-meta">
+          <span class="result-type">{{ typeLabels[item.type] }}</span>
+          <span v-if="item.matchField">&middot; 匹配: {{ item.matchField }}</span>
         </div>
+        <div v-if="item.snippet" class="result-snippet">{{ item.snippet }}</div>
       </div>
+    </div>
+
+    <div v-else-if="query && !loading" class="empty-state">
+      <p>没有找到相关结果</p>
+      <button v-if="aiStore.isConfigured && !aiSuggestions.length" class="btn btn-secondary" @click="getAISuggestions">
+        让 AI 帮你优化搜索词
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { Search, Close } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { Search as SearchIcon } from '@element-plus/icons-vue'
 import { useNotesStore } from '@/stores/notes'
-import { useTagsStore } from '@/stores/tags'
-import type { Note } from '@/types'
+import { useAIStore } from '@/stores/ai'
 
 const router = useRouter()
-const route = useRoute()
 const notesStore = useNotesStore()
-const tagsStore = useTagsStore()
+const aiStore = useAIStore()
 
-const searchQuery = ref('')
-const filterType = ref('')
-const filterTagId = ref('')
-const searchResults = ref<Note[]>([])
+const query = ref('')
+const activeFilter = ref('all')
+const results = ref<any[]>([])
+const loading = ref(false)
+const aiSuggestions = ref<string[]>([])
 
-const noteTypes = [
-  { value: '', label: '全部' },
-  { value: 'markdown', label: '笔记' },
-  { value: 'bookmark', label: '书签' },
-  { value: 'snippet', label: '代码' },
+const filters = [
+  { label: '全部', value: 'all' },
+  { label: '笔记', value: 'markdown' },
+  { label: '书签', value: 'bookmark' },
+  { label: '代码', value: 'snippet' },
 ]
 
-const filteredResults = computed(() => {
-  let results = searchQuery.value ? searchResults.value : notesStore.notes
-  if (filterType.value) results = results.filter(n => n.type === filterType.value)
-  if (filterTagId.value) results = results.filter(n => n.tags?.some(t => t.id === filterTagId.value))
-  return [...results].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-})
+const typeLabels: Record<string, string> = { markdown: '笔记', bookmark: '书签', snippet: '代码' }
 
-let timer: ReturnType<typeof setTimeout> | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function handleSearch() {
-  if (timer) clearTimeout(timer)
-  timer = setTimeout(async () => {
-    if (searchQuery.value.trim()) {
-      searchResults.value = await notesStore.searchNotes(searchQuery.value)
-    } else {
-      searchResults.value = []
-    }
-  }, 300)
+  if (searchTimer) clearTimeout(searchTimer)
+  aiSuggestions.value = []
+  searchTimer = setTimeout(doSearch, 300)
 }
 
-function clearSearch() { searchQuery.value = ''; searchResults.value = [] }
-
-function getPreview(note: Note): string {
-  if (note.type === 'bookmark') return note.description || note.url || ''
-  return (note.content || '').replace(/[#*`\[\]]/g, '').slice(0, 150)
+async function doSearch() {
+  if (!query.value.trim()) { results.value = []; return }
+  loading.value = true
+  try {
+    const all = await notesStore.searchNotes(query.value)
+    results.value = activeFilter.value === 'all'
+      ? all
+      : all.filter((r: any) => r.type === activeFilter.value)
+  } finally {
+    loading.value = false
+  }
 }
 
-function highlight(text: string): string {
-  if (!searchQuery.value || !text) return text
-  return text.replace(new RegExp(`(${searchQuery.value})`, 'gi'), '<mark>$1</mark>')
+async function getAISuggestions() {
+  if (!query.value.trim()) return
+  aiSuggestions.value = await aiStore.searchEnhance(query.value)
 }
 
-function formatTime(t: string) {
-  const d = new Date(t), now = new Date(), diff = now.getTime() - d.getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days < 1) return '今天'
-  if (days < 2) return '昨天'
-  if (days < 7) return `${days}天前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+function openNote(id: string) {
+  router.push(`/editor/${id}`)
 }
-
-onMounted(() => {
-  const q = route.query.q as string
-  if (q) { searchQuery.value = q; handleSearch() }
-})
-
-watch(() => route.query.q, (q) => {
-  if (q && typeof q === 'string') { searchQuery.value = q; handleSearch() }
-})
 </script>
 
 <style scoped>
-.search-view { height: 100%; display: flex; flex-direction: column; }
+.search-view { padding: var(--space-xl); max-width: 680px; }
 
-.search-header {
-  padding: var(--space-lg) var(--space-xl);
-  border-bottom: 1px solid var(--border-color);
+.search-bar { margin-bottom: var(--space-lg); }
+
+.search-filters {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
 }
-
-.search-bar {
-  position: relative;
-  max-width: 480px;
-  margin-bottom: var(--space-md);
-}
-
-.search-icon {
-  position: absolute; left: var(--space-md); top: 50%; transform: translateY(-50%);
-  color: var(--text-tertiary);
-}
-
-.search-input {
-  width: 100%;
-  padding: var(--space-sm) var(--space-lg);
-  padding-left: 36px;
-  font-size: 0.9375rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-}
-
-.search-input:focus { border-color: var(--text-tertiary); background: var(--bg-primary); }
-
-.clear-btn {
-  position: absolute; right: var(--space-sm); top: 50%; transform: translateY(-50%);
-  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; color: var(--text-tertiary);
-}
-.clear-btn:hover { background: var(--bg-hover); }
-
-.filters { display: flex; align-items: center; gap: var(--space-sm); }
 
 .filter-btn {
   padding: 4px 12px;
   font-size: 0.75rem;
-  color: var(--text-tertiary);
   border-radius: var(--radius-full);
-  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  background: none;
+  cursor: pointer;
 }
-.filter-btn:hover { color: var(--text-primary); }
-.filter-btn.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.filter-btn.active {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
 
-.search-body { flex: 1; overflow-y: auto; padding: var(--space-lg) var(--space-xl); }
+.ai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+  font-size: 0.8125rem;
+}
+.ai-suggestions-label { color: var(--text-tertiary); }
+.ai-suggestion {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  border: 1px dashed var(--accent-color);
+  border-radius: var(--radius-full);
+  color: var(--accent-color);
+  cursor: pointer;
+  background: none;
+}
+.ai-suggestion:hover { background: var(--accent-color); color: #fff; }
 
-.empty-hint { text-align: center; padding: var(--space-2xl); color: var(--text-tertiary); font-size: 0.875rem; }
-
-.results-count { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: var(--space-md); }
-
-.results { max-width: 640px; }
+.result-count { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: var(--space-md); }
 
 .result-item {
-  display: flex; align-items: flex-start; gap: var(--space-md);
-  padding: var(--space-md) var(--space-sm);
-  border-bottom: 1px solid var(--border-light);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background var(--transition-fast);
 }
 .result-item:hover { background: var(--bg-secondary); }
-.result-item:last-child { border-bottom: none; }
 
-.result-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
-.result-dot.markdown { background: var(--text-primary); }
-.result-dot.bookmark { background: var(--accent-color); }
-.result-dot.snippet { background: var(--warning-color); }
+.result-title { font-weight: 500; margin-bottom: 4px; }
+.result-meta { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 4px; }
+.result-type { background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; }
+.result-snippet { font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; }
 
-.result-info { flex: 1; min-width: 0; }
-.result-title { font-size: 0.875rem; font-weight: 500; margin-bottom: 2px; }
-.result-preview { font-size: 0.75rem; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.result-preview :deep(mark) { background: #fff3cd; border-radius: 2px; }
-.result-time { font-size: 0.75rem; color: var(--text-tertiary); flex-shrink: 0; }
+.empty-state {
+  text-align: center;
+  padding: var(--space-2xl) 0;
+  color: var(--text-tertiary);
+}
+.empty-state .btn { margin-top: var(--space-md); }
 </style>

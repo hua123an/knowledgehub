@@ -7,12 +7,27 @@
           <el-icon><ArrowLeft /></el-icon>
         </button>
         <span class="header-type">{{ typeLabels[note.type] }}</span>
-        <span class="header-sep">·</span>
+        <span class="header-sep">&middot;</span>
         <span class="header-status" :class="{ unsaved: hasChanges }">
           {{ saving ? '保存中' : hasChanges ? '未保存' : '已保存' }}
         </span>
       </div>
       <div class="header-right">
+        <!-- AI 工具按钮 -->
+        <el-dropdown trigger="click" @command="handleAICommand" v-if="aiStore.isConfigured">
+          <button class="icon-btn ai-btn" title="AI 助手">AI</button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="summarize">总结内容</el-dropdown-item>
+              <el-dropdown-item command="polish">润色文本</el-dropdown-item>
+              <el-dropdown-item command="continue">续写</el-dropdown-item>
+              <el-dropdown-item command="explain">解释内容</el-dropdown-item>
+              <el-dropdown-item command="suggestTags" divided>推荐标签</el-dropdown-item>
+              <el-dropdown-item command="translate-en">翻译为英文</el-dropdown-item>
+              <el-dropdown-item command="translate-zh">翻译为中文</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-dropdown trigger="click" @command="handleCommand">
           <button class="icon-btn">
             <el-icon><More /></el-icon>
@@ -30,6 +45,38 @@
         </el-dropdown>
       </div>
     </header>
+
+    <!-- AI 结果弹窗 -->
+    <div v-if="aiResult" class="ai-result-bar">
+      <div class="ai-result-header">
+        <span>AI {{ aiResultLabel }}</span>
+        <div class="ai-result-actions">
+          <button class="btn btn-sm" @click="applyAIResult">应用</button>
+          <button class="btn btn-sm btn-ghost" @click="copyAIResult">复制</button>
+          <button class="btn btn-sm btn-ghost" @click="aiResult = ''">关闭</button>
+        </div>
+      </div>
+      <div class="ai-result-content">{{ aiResult }}</div>
+    </div>
+
+    <!-- AI 推荐标签 -->
+    <div v-if="suggestedTags.length" class="ai-result-bar">
+      <div class="ai-result-header">
+        <span>AI 推荐标签</span>
+        <button class="btn btn-sm btn-ghost" @click="suggestedTags = []">关闭</button>
+      </div>
+      <div class="suggested-tags">
+        <button v-for="tag in suggestedTags" :key="tag" class="suggested-tag" @click="createAndAddTag(tag)">
+          + {{ tag }}
+        </button>
+      </div>
+    </div>
+
+    <!-- AI loading -->
+    <div v-if="aiStore.loading" class="ai-loading-bar">
+      <el-icon class="is-loading"><Loading /></el-icon>
+      <span>AI 处理中...</span>
+    </div>
 
     <!-- 编辑区 -->
     <div class="editor-main">
@@ -151,20 +198,20 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  ArrowLeft, More, Download, Delete, Link, Loading, EditPen, Document
+  ArrowLeft, More, Download, Delete, Link, Loading
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import { useNotesStore } from '@/stores/notes'
 import { useTagsStore } from '@/stores/tags'
-import { useFoldersStore } from '@/stores/folders'
+import { useAIStore } from '@/stores/ai'
 import type { Note } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
 const notesStore = useNotesStore()
 const tagsStore = useTagsStore()
-const foldersStore = useFoldersStore()
+const aiStore = useAIStore()
 
 const note = ref<Note | null>(null)
 const editTitle = ref('')
@@ -179,6 +226,11 @@ const hasChanges = ref(false)
 const textareaRef = ref<HTMLTextAreaElement>()
 const outLinks = ref<Array<{ id: string; title: string }>>([])
 const inLinks = ref<Array<{ id: string; title: string }>>([])
+
+// AI
+const aiResult = ref('')
+const aiResultLabel = ref('')
+const suggestedTags = ref<string[]>([])
 
 const typeLabels: Record<string, string> = { markdown: 'Markdown', bookmark: '书签', snippet: '代码片段' }
 
@@ -208,7 +260,7 @@ const wordCount = computed(() => editContent.value.replace(/\s/g, '').length)
 async function loadNote() {
   const id = route.params.id as string
   if (!id) return
-  const result = await notesStore.fetchNote(id)
+  const result = await notesStore.getNote(id)
   if (result) {
     note.value = result
     editTitle.value = result.title
@@ -270,15 +322,91 @@ function insertFormat(before: string, after: string) {
 
 async function addTag(tagId: string) {
   if (!note.value || !tagId) return
-  await notesStore.addTagToNote(note.value.id, tagId)
-  await loadNote()
+  try {
+    await window.api.tagAddToNote(note.value.id, tagId)
+    await loadNote()
+  } catch (e) { console.error(e) }
   selectedTagId.value = ''
 }
 
 async function removeTag(tagId: string) {
   if (!note.value) return
-  await notesStore.removeTagFromNote(note.value.id, tagId)
-  await loadNote()
+  try {
+    await window.api.tagRemoveFromNote(note.value.id, tagId)
+    await loadNote()
+  } catch (e) { console.error(e) }
+}
+
+// AI commands
+async function handleAICommand(cmd: string) {
+  const content = editContent.value || editTitle.value
+  if (!content) {
+    ElMessage.warning('没有内容可以处理')
+    return
+  }
+
+  aiResult.value = ''
+  suggestedTags.value = []
+
+  if (cmd === 'summarize') {
+    aiResultLabel.value = '总结'
+    aiResult.value = await aiStore.summarize(content)
+  } else if (cmd === 'polish') {
+    aiResultLabel.value = '润色'
+    aiResult.value = await aiStore.polish(content)
+  } else if (cmd === 'continue') {
+    aiResultLabel.value = '续写'
+    aiResult.value = await aiStore.continueWriting(content)
+  } else if (cmd === 'explain') {
+    aiResultLabel.value = '解释'
+    aiResult.value = await aiStore.explain(content)
+  } else if (cmd === 'suggestTags') {
+    suggestedTags.value = await aiStore.suggestTags(content)
+  } else if (cmd.startsWith('translate-')) {
+    const lang = cmd === 'translate-en' ? 'English' : '中文'
+    aiResultLabel.value = '翻译'
+    aiResult.value = await aiStore.translate(content, lang)
+  }
+
+  if (aiStore.error) {
+    ElMessage.error(aiStore.error)
+  }
+}
+
+function applyAIResult() {
+  if (!aiResult.value) return
+  if (aiResultLabel.value === '续写') {
+    editContent.value += '\n' + aiResult.value
+  } else {
+    editContent.value = aiResult.value
+  }
+  handleContentChange()
+  aiResult.value = ''
+}
+
+function copyAIResult() {
+  navigator.clipboard.writeText(aiResult.value)
+  ElMessage.success('已复制')
+}
+
+async function createAndAddTag(tagName: string) {
+  if (!note.value) return
+  try {
+    // 先查找或创建标签
+    let tag = tagsStore.tags.find(t => t.name === tagName)
+    if (!tag) {
+      const result = await window.api.tagCreate({ name: tagName })
+      if (result.success && result.data) {
+        tag = result.data
+        await tagsStore.fetchTags()
+      }
+    }
+    if (tag) {
+      await window.api.tagAddToNote(note.value.id, tag.id)
+      await loadNote()
+    }
+    suggestedTags.value = suggestedTags.value.filter(t => t !== tagName)
+  } catch (e) { console.error(e) }
 }
 
 async function handleCommand(cmd: string) {
@@ -328,8 +456,66 @@ onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (hasChanges.value
 .header-type { color: var(--text-secondary); }
 .header-sep { color: var(--border-color); }
 .header-status { color: var(--text-tertiary); font-size: 0.75rem; }
-.header-status.unsaved { color: var(--warning-color); }
+.header-status.unsaved { color: var(--warning-color, #e6a23c); }
 .header-right { display: flex; align-items: center; gap: var(--space-xs); }
+
+.ai-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-color);
+  padding: 4px 10px;
+  border: 1px solid var(--accent-color);
+  border-radius: var(--radius-md);
+}
+.ai-btn:hover { background: var(--accent-color); color: #fff; }
+
+/* AI result */
+.ai-result-bar {
+  border-bottom: 1px solid var(--border-color);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--bg-secondary);
+  font-size: 0.8125rem;
+}
+.ai-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+  font-weight: 500;
+}
+.ai-result-actions { display: flex; gap: var(--space-xs); }
+.ai-result-content {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+}
+.btn-sm { padding: 2px 8px; font-size: 0.75rem; }
+.btn-ghost { background: none; color: var(--text-secondary); }
+.btn-ghost:hover { color: var(--text-primary); }
+
+.suggested-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggested-tag {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.suggested-tag:hover { border-color: var(--accent-color); color: var(--accent-color); }
+
+.ai-loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
 
 .editor-main { flex: 1; display: flex; overflow: hidden; }
 
@@ -351,10 +537,8 @@ onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (hasChanges.value
   outline: none;
   color: var(--text-primary);
 }
-
 .title-input::placeholder { color: var(--text-tertiary); }
 
-/* Markdown */
 .markdown-editor { flex: 1; display: flex; flex-direction: column; }
 
 .editor-toolbar {
@@ -373,7 +557,7 @@ onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (hasChanges.value
   font-size: 0.75rem;
   color: var(--text-secondary);
   border-radius: 3px;
-  transition: all var(--transition-fast);
+  transition: all 0.15s;
 }
 .tb:hover { background: var(--bg-hover); color: var(--text-primary); }
 .tb.active { background: var(--bg-active); color: var(--text-primary); }
@@ -406,7 +590,6 @@ onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (hasChanges.value
 
 .preview-pane { width: 50%; padding: var(--space-lg); overflow-y: auto; background: var(--bg-secondary); }
 
-/* 书签 & 代码 */
 .field { margin-bottom: var(--space-lg); }
 .field label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-tertiary); margin-bottom: var(--space-xs); text-transform: uppercase; letter-spacing: 0.5px; }
 .url-row { display: flex; gap: var(--space-sm); }
@@ -427,7 +610,6 @@ onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (hasChanges.value
   color: var(--text-primary);
 }
 
-/* 右侧 */
 .editor-sidebar {
   width: 240px;
   border-left: 1px solid var(--border-color);

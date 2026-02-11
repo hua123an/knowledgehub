@@ -1,9 +1,10 @@
 <template>
   <el-dialog
-    v-model="aiStore.settingsOpen"
+    :model-value="true"
     title="AI 设置"
     width="440px"
     :append-to-body="true"
+    @close="emit('close')"
   >
     <div class="ai-settings">
       <div class="field">
@@ -49,12 +50,13 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAIStore } from '@/stores/ai'
 
+const emit = defineEmits<{ close: [] }>()
 const aiStore = useAIStore()
 const testing = ref(false)
 
 async function save() {
   await aiStore.saveConfig()
-  aiStore.settingsOpen = false
+  emit('close')
   ElMessage.success('AI 设置已保存')
 }
 
@@ -83,45 +85,14 @@ async function testConnection() {
 </script>
 
 <style scoped>
-.ai-settings {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.field label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.field-hint {
-  font-size: 0.6875rem;
-  color: var(--text-tertiary);
-}
-
+.ai-settings { display: flex; flex-direction: column; gap: var(--space-lg); }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 0.8125rem; font-weight: 500; color: var(--text-primary); }
+.field-hint { font-size: 0.6875rem; color: var(--text-tertiary); }
 .status {
-  font-size: 0.75rem;
-  color: var(--warning-color);
-  padding: var(--space-sm) var(--space-md);
-  background: #fffbeb;
-  border-radius: var(--radius-md);
+  font-size: 0.75rem; color: var(--warning-color, #e6a23c);
+  padding: var(--space-sm) var(--space-md); background: #fffbeb; border-radius: var(--radius-md);
 }
-
-.status.ok {
-  color: var(--success-color);
-  background: #f0fdf4;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
-}
+.status.ok { color: var(--success-color, #67c23a); background: #f0fdf4; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 </style>
