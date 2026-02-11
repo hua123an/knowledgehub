@@ -6,6 +6,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { createRequire } from "module";
 import { randomFillSync, randomUUID } from "node:crypto";
+import https from "https";
+import http from "http";
 const require$1 = createRequire(import.meta.url);
 const Database = require$1("better-sqlite3");
 let db = null;
@@ -193,7 +195,22 @@ const IPC_CHANNELS = {
   LINK_GET_GRAPH: "link:getGraph",
   // 设置
   SETTINGS_GET: "settings:get",
-  SETTINGS_SET: "settings:set"
+  SETTINGS_SET: "settings:set",
+  // AI
+  AI_CHAT: "ai:chat",
+  AI_CHAT_STREAM: "ai:chatStream",
+  AI_STOP: "ai:stop",
+  AI_SUMMARIZE: "ai:summarize",
+  AI_SUGGEST_TAGS: "ai:suggestTags",
+  AI_POLISH: "ai:polish",
+  AI_CONTINUE: "ai:continue",
+  AI_TRANSLATE: "ai:translate",
+  AI_EXPLAIN: "ai:explain",
+  AI_SEARCH_ENHANCE: "ai:searchEnhance",
+  AI_CHAT_HISTORY_LIST: "ai:chatHistoryList",
+  AI_CHAT_HISTORY_GET: "ai:chatHistoryGet",
+  AI_CHAT_HISTORY_SAVE: "ai:chatHistorySave",
+  AI_CHAT_HISTORY_DELETE: "ai:chatHistoryDelete"
 };
 function rowToNote(row) {
   return {
@@ -633,12 +650,338 @@ function registerSettingsHandlers() {
     }
   });
 }
+let activeRequest = null;
+function getAIConfig() {
+  const db2 = getDatabase();
+  const rows = db2.prepare("SELECT key, value FROM settings WHERE key LIKE ?").all("ai_%");
+  const config = {};
+  rows.forEach((r) => {
+    try {
+      config[r.key] = JSON.parse(r.value);
+    } catch {
+      config[r.key] = r.value;
+    }
+  });
+  return {
+    baseUrl: config["ai_base_url"] || "https://api.openai.com/v1",
+    apiKey: config["ai_api_key"] || "",
+    model: config["ai_model"] || "gpt-3.5-turbo"
+  };
+}
+async function aiChat(messages, systemPrompt) {
+  const config = getAIConfig();
+  if (!config.apiKey) throw new Error("请先在设置中配置 AI API Key");
+  const allMessages = [];
+  if (systemPrompt) {
+    allMessages.push({ role: "system", content: systemPrompt });
+  }
+  allMessages.push(...messages);
+  const body = JSON.stringify({
+    model: config.model,
+    messages: allMessages,
+    temperature: 0.7,
+    max_tokens: 2048
+  });
+  return new Promise((resolve, reject) => {
+    const url = new URL(config.baseUrl.replace(/\/$/, "") + "/chat/completions");
+    const isHttps = url.protocol === "https:";
+    const transport = isHttps ? https : http;
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${config.apiKey}`
+      }
+    }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk.toString();
+      });
+      res.on("end", () => {
+        var _a, _b, _c;
+        try {
+          const json = JSON.parse(data);
+          if (json.error) {
+            reject(new Error(json.error.message || JSON.stringify(json.error)));
+            return;
+          }
+          resolve(((_c = (_b = (_a = json.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "");
+        } catch (e) {
+          reject(new Error("AI 响应解析失败: " + data.slice(0, 200)));
+        }
+      });
+    });
+    activeRequest = req;
+    req.on("error", (e) => reject(new Error("AI 请求失败: " + e.message)));
+    req.write(body);
+    req.end();
+  });
+}
+async function aiChatStream(messages, systemPrompt, onChunk, onDone, onError) {
+  const config = getAIConfig();
+  if (!config.apiKey) {
+    onError("请先在设置中配置 AI API Key");
+    return;
+  }
+  const allMessages = [];
+  if (systemPrompt) {
+    allMessages.push({ role: "system", content: systemPrompt });
+  }
+  allMessages.push(...messages);
+  const body = JSON.stringify({
+    model: config.model,
+    messages: allMessages,
+    temperature: 0.7,
+    max_tokens: 2048,
+    stream: true
+  });
+  const url = new URL(config.baseUrl.replace(/\/$/, "") + "/chat/completions");
+  const isHttps = url.protocol === "https:";
+  const transport = isHttps ? https : http;
+  const req = transport.request({
+    hostname: url.hostname,
+    port: url.port || (isHttps ? 443 : 80),
+    path: url.pathname + url.search,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.apiKey}`
+    }
+  }, (res) => {
+    let buffer = "";
+    res.on("data", (chunk) => {
+      var _a, _b, _c;
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") {
+          onDone();
+          return;
+        }
+        try {
+          const json = JSON.parse(data);
+          const content = (_c = (_b = (_a = json.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.delta) == null ? void 0 : _c.content;
+          if (content) onChunk(content);
+        } catch {
+        }
+      }
+    });
+    res.on("end", () => onDone());
+  });
+  activeRequest = req;
+  req.on("error", (e) => onError("AI 请求失败: " + e.message));
+  req.write(body);
+  req.end();
+}
+function aiStop() {
+  if (activeRequest) {
+    activeRequest.destroy();
+    activeRequest = null;
+  }
+}
+const SYSTEM_PROMPTS = {
+  summarize: "你是一个知识库助手。请用简洁的语言总结以下内容，提取核心要点。用中文回答。",
+  suggestTags: "你是一个知识库助手。请根据以下内容建议 3-5 个合适的标签。只输出标签名，用逗号分隔，不要其他内容。用中文回答。",
+  polish: "你是一个写作助手。请润色以下文字，使其更加通顺、专业，保持原意不变。直接输出润色后的内容，不要其他说明。",
+  continue: "你是一个写作助手。请根据以下内容继续往下写，保持风格一致，自然地扩展内容。直接输出续写内容，不要重复已有内容。",
+  translate: "你是一个翻译助手。请将以下内容翻译成{lang}。直接输出翻译结果，不要其他说明。",
+  explain: "你是一个知识库助手。请用通俗易懂的语言解释以下内容。用中文回答。",
+  searchEnhance: "你是一个搜索助手。用户想搜索以下内容，请帮忙扩展搜索关键词，生成 3-5 个相关的搜索词。只输出关键词，用逗号分隔。"
+};
+async function aiSummarize(content) {
+  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.summarize);
+}
+async function aiSuggestTags(content) {
+  const result = await aiChat([{ role: "user", content }], SYSTEM_PROMPTS.suggestTags);
+  return result.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+}
+async function aiPolish(content) {
+  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.polish);
+}
+async function aiContinue(content) {
+  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.continue);
+}
+async function aiTranslate(content, lang) {
+  const prompt = SYSTEM_PROMPTS.translate.replace("{lang}", lang);
+  return aiChat([{ role: "user", content }], prompt);
+}
+async function aiExplain(content) {
+  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.explain);
+}
+async function aiSearchEnhance(query) {
+  const result = await aiChat([{ role: "user", content: query }], SYSTEM_PROMPTS.searchEnhance);
+  return result.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+}
+function registerAIHandlers() {
+  const db2 = getDatabase();
+  db2.exec(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '新对话',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db2.exec(`
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+    )
+  `);
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT, async (_event, messages, systemPrompt) => {
+    try {
+      const result = await aiChat(messages, systemPrompt);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT_STREAM, async (event, messages, systemPrompt) => {
+    try {
+      const win2 = BrowserWindow.fromWebContents(event.sender);
+      await aiChatStream(
+        messages,
+        systemPrompt,
+        (text) => {
+          if (win2 && !win2.isDestroyed()) {
+            win2.webContents.send("ai:stream:chunk", text);
+          }
+        },
+        () => {
+          if (win2 && !win2.isDestroyed()) {
+            win2.webContents.send("ai:stream:done");
+          }
+        },
+        (err) => {
+          if (win2 && !win2.isDestroyed()) {
+            win2.webContents.send("ai:stream:error", err);
+          }
+        }
+      );
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_STOP, async () => {
+    aiStop();
+    return { success: true };
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_SUMMARIZE, async (_event, content) => {
+    try {
+      const result = await aiSummarize(content);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_SUGGEST_TAGS, async (_event, content) => {
+    try {
+      const result = await aiSuggestTags(content);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_POLISH, async (_event, content) => {
+    try {
+      const result = await aiPolish(content);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CONTINUE, async (_event, content) => {
+    try {
+      const result = await aiContinue(content);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_TRANSLATE, async (_event, content, lang) => {
+    try {
+      const result = await aiTranslate(content, lang);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_EXPLAIN, async (_event, content) => {
+    try {
+      const result = await aiExplain(content);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_SEARCH_ENHANCE, async (_event, query) => {
+    try {
+      const result = await aiSearchEnhance(query);
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_LIST, async () => {
+    try {
+      const rows = db2.prepare("SELECT * FROM ai_conversations ORDER BY updated_at DESC").all();
+      return { success: true, data: rows };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_GET, async (_event, conversationId) => {
+    try {
+      const messages = db2.prepare("SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC").all(conversationId);
+      return { success: true, data: messages };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_SAVE, async (_event, conversationId, title, messages) => {
+    try {
+      db2.prepare(`
+        INSERT INTO ai_conversations (id, title, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET title = ?, updated_at = CURRENT_TIMESTAMP
+      `).run(conversationId, title, title);
+      db2.prepare("DELETE FROM ai_messages WHERE conversation_id = ?").run(conversationId);
+      const insert = db2.prepare("INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, ?, ?)");
+      for (const msg of messages) {
+        insert.run(conversationId, msg.role, msg.content);
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_DELETE, async (_event, conversationId) => {
+    try {
+      db2.prepare("DELETE FROM ai_conversations WHERE id = ?").run(conversationId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+}
 function registerAllHandlers() {
   registerNoteHandlers();
   registerFolderHandlers();
   registerTagHandlers();
   registerLinkHandlers();
   registerSettingsHandlers();
+  registerAIHandlers();
 }
 createRequire$1(import.meta.url);
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));

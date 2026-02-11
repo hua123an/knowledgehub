@@ -41,4 +41,20 @@ export const IPC_CHANNELS = {
   // 设置
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+
+  // AI
+  AI_CHAT: 'ai:chat',
+  AI_CHAT_STREAM: 'ai:chatStream',
+  AI_STOP: 'ai:stop',
+  AI_SUMMARIZE: 'ai:summarize',
+  AI_SUGGEST_TAGS: 'ai:suggestTags',
+  AI_POLISH: 'ai:polish',
+  AI_CONTINUE: 'ai:continue',
+  AI_TRANSLATE: 'ai:translate',
+  AI_EXPLAIN: 'ai:explain',
+  AI_SEARCH_ENHANCE: 'ai:searchEnhance',
+  AI_CHAT_HISTORY_LIST: 'ai:chatHistoryList',
+  AI_CHAT_HISTORY_GET: 'ai:chatHistoryGet',
+  AI_CHAT_HISTORY_SAVE: 'ai:chatHistorySave',
+  AI_CHAT_HISTORY_DELETE: 'ai:chatHistoryDelete',
 } as const

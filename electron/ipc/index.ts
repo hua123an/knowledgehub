@@ -3,6 +3,7 @@ import { registerFolderHandlers } from './folders'
 import { registerTagHandlers } from './tags'
 import { registerLinkHandlers } from './links'
 import { registerSettingsHandlers } from './settings'
+import { registerAIHandlers } from '../ai'
 
 export function registerAllHandlers() {
   registerNoteHandlers()
@@ -10,4 +11,5 @@ export function registerAllHandlers() {
   registerTagHandlers()
   registerLinkHandlers()
   registerSettingsHandlers()
+  registerAIHandlers()
 }
