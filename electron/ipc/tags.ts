@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../database'
-import { IPC_CHANNELS } from '../../src/types'
+import { IPC_CHANNELS } from '../constants'
 
 interface TagRow {
   id: string

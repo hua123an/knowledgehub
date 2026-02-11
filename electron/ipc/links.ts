@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDatabase } from '../database'
-import { IPC_CHANNELS } from '../../src/types'
+import { IPC_CHANNELS } from '../constants'
 
 interface LinkRow {
   source_id: string

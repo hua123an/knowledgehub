@@ -11,6 +11,14 @@ export default defineConfig({
       main: {
         // Shortcut of `build.lib.entry`.
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            rollupOptions: {
+              // 原生模块必须设为外部依赖
+              external: ['better-sqlite3'],
+            },
+          },
+        },
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.
@@ -26,4 +34,9 @@ export default defineConfig({
         : {},
     }),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
 })

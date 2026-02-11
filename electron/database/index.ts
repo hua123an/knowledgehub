@@ -1,18 +1,23 @@
-import Database from 'better-sqlite3'
 import { app } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
+import { createRequire } from 'module'
 
-let db: Database.Database | null = null
+// 使用 createRequire 加载原生模块
+const require = createRequire(import.meta.url)
+const Database = require('better-sqlite3')
 
-export function getDatabase(): Database.Database {
+type DatabaseType = ReturnType<typeof Database>
+let db: DatabaseType | null = null
+
+export function getDatabase(): DatabaseType {
   if (!db) {
     throw new Error('Database not initialized')
   }
   return db
 }
 
-export function initDatabase(): Database.Database {
+export function initDatabase(): DatabaseType {
   const userDataPath = app.getPath('userData')
   const dbPath = path.join(userDataPath, 'knowledge.db')
   

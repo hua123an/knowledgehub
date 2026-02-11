@@ -92,8 +92,19 @@ export const useNotesStore = defineStore('notes', () => {
     return null
   }
 
-  async function updateNote(id: string, updates: Partial<Note>) {
-    const result = await window.api.noteUpdate(id, updates)
+  async function updateNote(noteOrId: string | Note, updates?: Partial<Note>) {
+    let id: string
+    let updateData: Partial<Note>
+    
+    if (typeof noteOrId === 'string') {
+      id = noteOrId
+      updateData = updates || {}
+    } else {
+      id = noteOrId.id
+      updateData = noteOrId
+    }
+    
+    const result = await window.api.noteUpdate(id, updateData)
     if (result.success && result.data) {
       const index = notes.value.findIndex(n => n.id === id)
       if (index !== -1) {
