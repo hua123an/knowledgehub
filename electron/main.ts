@@ -2,6 +2,8 @@ import { app, BrowserWindow } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { initDatabase, closeDatabase } from './database'
+import { registerAllHandlers } from './ipc'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -28,9 +30,17 @@ let win: BrowserWindow | null
 
 function createWindow() {
   win = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 1000,
+    minHeight: 600,
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   })
 
@@ -65,4 +75,16 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+// 应用退出时关闭数据库
+app.on('before-quit', () => {
+  closeDatabase()
+})
+
+app.whenReady().then(() => {
+  // 初始化数据库
+  initDatabase()
+  // 注册所有 IPC 处理器
+  registerAllHandlers()
+  // 创建窗口
+  createWindow()
+})

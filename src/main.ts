@@ -1,10 +1,23 @@
 import { createApp } from 'vue'
-import './style.css'
-import App from './App.vue'
+import { createPinia } from 'pinia'
+import ElementPlus from 'element-plus'
+import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import 'element-plus/dist/index.css'
 
-createApp(App).mount('#app').$nextTick(() => {
-  // Use contextBridge
-  window.ipcRenderer.on('main-process-message', (_event, message) => {
-    console.log(message)
-  })
-})
+import App from './App.vue'
+import router from './router'
+import './assets/styles/index.css'
+
+const app = createApp(App)
+
+// 注册 Element Plus 图标
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(key, component)
+}
+
+// 使用插件
+app.use(createPinia())
+app.use(router)
+app.use(ElementPlus)
+
+app.mount('#app')

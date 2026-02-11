@@ -1,0 +1,171 @@
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--el-border-color-darker);
+}
+
+/* Selection */
+::selection {
+  background: var(--el-color-primary-light-7);
+  color: var(--el-text-color-primary);
+}
+
+/* Links */
+a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Wiki Links */
+.wiki-link {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.wiki-link:hover {
+  background: var(--el-color-primary-light-7);
+  text-decoration: none;
+}
+
+/* Markdown Preview */
+.markdown-preview {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--el-text-color-primary);
+}
+
+.markdown-preview h1 {
+  font-size: 2em;
+  border-bottom: 1px solid var(--el-border-color);
+  padding-bottom: 0.3em;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding-bottom: 0.3em;
+}
+
+.markdown-preview h3 {
+  font-size: 1.25em;
+}
+
+.markdown-preview h4, .markdown-preview h5, .markdown-preview h6 {
+  font-size: 1em;
+}
+
+.markdown-preview blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--el-color-primary);
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+}
+
+.markdown-preview ul, .markdown-preview ol {
+  padding-left: 2em;
+  margin: 1em 0;
+}
+
+.markdown-preview li {
+  margin: 0.25em 0;
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.markdown-preview th, .markdown-preview td {
+  border: 1px solid var(--el-border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: var(--el-fill-color-light);
+  font-weight: 600;
+}
+
+.markdown-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid var(--el-border-color);
+  margin: 2em 0;
+}
+
+/* Highlight */
+mark {
+  background: var(--el-color-warning-light-5);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(-100%);
+}
+
+/* Import dark theme */
+@import './dark.css';

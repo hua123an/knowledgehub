@@ -9,7 +9,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.21"
+    "@element-plus/icons-vue": "^2.3.2",
+    "@milkdown/core": "^7.18.0",
+    "@milkdown/ctx": "^7.18.0",
+    "@milkdown/plugin-history": "^7.18.0",
+    "@milkdown/plugin-listener": "^7.18.0",
+    "@milkdown/preset-commonmark": "^7.18.0",
+    "@milkdown/preset-gfm": "^7.18.0",
+    "@milkdown/prose": "^7.18.0",
+    "@milkdown/theme-nord": "^7.18.0",
+    "element-plus": "^2.13.2",
+    "marked": "^17.0.1",
+    "pinia": "^3.0.4",
+    "uuid": "^13.0.0",
+    "vis-network": "^10.0.2",
+    "vue": "^3.4.21",
+    "vue-router": "4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
