@@ -41,7 +41,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // Use store inside guard to ensure pinia is active
   // We need to import useWorkspaceStore here or assume it's available?
   // It's better to verify logic. Since Pinia is installed in main, we can use it here.

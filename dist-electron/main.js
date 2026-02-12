@@ -1,31 +1,23 @@
-import { app, ipcMain, BrowserWindow, dialog, shell } from "electron";
-import { createRequire as createRequire$1 } from "node:module";
-import { fileURLToPath } from "node:url";
-import path$1 from "node:path";
-import * as path from "path";
-import * as fs from "fs";
-import { createRequire } from "module";
-import { randomFillSync, randomUUID } from "node:crypto";
-import https from "https";
-import http from "http";
-const require$1 = createRequire(import.meta.url);
-const Database = require$1("better-sqlite3");
-let db = null;
-function getDatabase() {
-  if (!db) {
+import { app as C, ipcMain as c, BrowserWindow as x, dialog as te, shell as re } from "electron";
+import { fileURLToPath as ne } from "node:url";
+import I from "node:path";
+import * as L from "path";
+import * as S from "fs";
+import { createRequire as se } from "module";
+import { randomFillSync as ae, randomUUID as oe } from "node:crypto";
+import y from "node:fs";
+import $ from "https";
+import J from "http";
+const ce = se(import.meta.url), ie = ce("better-sqlite3");
+let p = null;
+function N() {
+  if (!p)
     throw new Error("Database not initialized");
-  }
-  return db;
+  return p;
 }
-function initDatabase() {
-  const userDataPath = app.getPath("userData");
-  const dbPath = path.join(userDataPath, "knowledge.db");
-  if (!fs.existsSync(userDataPath)) {
-    fs.mkdirSync(userDataPath, { recursive: true });
-  }
-  db = new Database(dbPath);
-  db.pragma("foreign_keys = ON");
-  const schema = `
+function Ee() {
+  const t = C.getPath("userData"), s = L.join(t, "knowledge.db");
+  S.existsSync(t) || S.mkdirSync(t, { recursive: !0 }), p = new ie(s), p.pragma("foreign_keys = ON"), p.exec(`
     -- 笔记/文档表
     CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY,
@@ -81,10 +73,9 @@ function initDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
-  `;
-  db.exec(schema);
+  `);
   try {
-    db.exec(`
+    p.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
         title,
         content,
@@ -92,29 +83,27 @@ function initDatabase() {
         content_rowid='rowid'
       );
     `);
-  } catch (e) {
+  } catch {
   }
   try {
-    db.exec(`
+    p.exec(`
       CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
         INSERT INTO notes_fts(rowid, title, content) VALUES (NEW.rowid, NEW.title, NEW.content);
       END;
-    `);
-    db.exec(`
+    `), p.exec(`
       CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
         INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', OLD.rowid, OLD.title, OLD.content);
         INSERT INTO notes_fts(rowid, title, content) VALUES (NEW.rowid, NEW.title, NEW.content);
       END;
-    `);
-    db.exec(`
+    `), p.exec(`
       CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
         INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', OLD.rowid, OLD.title, OLD.content);
       END;
     `);
-  } catch (e) {
+  } catch {
   }
   try {
-    db.exec(`
+    p.exec(`
       CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_id);
       CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type);
       CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC);
@@ -124,51 +113,37 @@ function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);
       CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_id);
     `);
-  } catch (e) {
+  } catch {
   }
-  return db;
+  return p;
 }
-function closeDatabase() {
-  if (db) {
-    db.close();
-    db = null;
-  }
+function le() {
+  p && (p.close(), p = null);
 }
-const byteToHex = [];
-for (let i = 0; i < 256; ++i) {
-  byteToHex.push((i + 256).toString(16).slice(1));
+const T = [];
+for (let t = 0; t < 256; ++t)
+  T.push((t + 256).toString(16).slice(1));
+function ue(t, s = 0) {
+  return (T[t[s + 0]] + T[t[s + 1]] + T[t[s + 2]] + T[t[s + 3]] + "-" + T[t[s + 4]] + T[t[s + 5]] + "-" + T[t[s + 6]] + T[t[s + 7]] + "-" + T[t[s + 8]] + T[t[s + 9]] + "-" + T[t[s + 10]] + T[t[s + 11]] + T[t[s + 12]] + T[t[s + 13]] + T[t[s + 14]] + T[t[s + 15]]).toLowerCase();
 }
-function unsafeStringify(arr, offset = 0) {
-  return (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
+const k = new Uint8Array(256);
+let U = k.length;
+function de() {
+  return U > k.length - 16 && (ae(k), U = 0), k.slice(U, U += 16);
 }
-const rnds8Pool = new Uint8Array(256);
-let poolPtr = rnds8Pool.length;
-function rng() {
-  if (poolPtr > rnds8Pool.length - 16) {
-    randomFillSync(rnds8Pool);
-    poolPtr = 0;
-  }
-  return rnds8Pool.slice(poolPtr, poolPtr += 16);
-}
-const native = { randomUUID };
-function _v4(options, buf, offset) {
-  var _a;
-  options = options || {};
-  const rnds = options.random ?? ((_a = options.rng) == null ? void 0 : _a.call(options)) ?? rng();
-  if (rnds.length < 16) {
+const V = { randomUUID: oe };
+function Te(t, s, r) {
+  var n;
+  t = t || {};
+  const e = t.random ?? ((n = t.rng) == null ? void 0 : n.call(t)) ?? de();
+  if (e.length < 16)
     throw new Error("Random bytes length must be >= 16");
-  }
-  rnds[6] = rnds[6] & 15 | 64;
-  rnds[8] = rnds[8] & 63 | 128;
-  return unsafeStringify(rnds);
+  return e[6] = e[6] & 15 | 64, e[8] = e[8] & 63 | 128, ue(e);
 }
-function v4(options, buf, offset) {
-  if (native.randomUUID && true && !options) {
-    return native.randomUUID();
-  }
-  return _v4(options);
+function G(t, s, r) {
+  return V.randomUUID && !t ? V.randomUUID() : Te(t);
 }
-const IPC_CHANNELS = {
+const i = {
   // 笔记操作
   NOTE_CREATE: "note:create",
   NOTE_UPDATE: "note:update",
@@ -213,303 +188,223 @@ const IPC_CHANNELS = {
   AI_CHAT_HISTORY_DELETE: "ai:chatHistoryDelete",
   // 系统
   SYSTEM_REVEAL: "system:reveal"
-};
-const globalContext = {
+}, f = {
   currentWorkspace: null
 };
-function rowToNote(row) {
+function F(t) {
   return {
-    id: row.id,
-    title: row.title,
-    content: row.content,
-    type: row.type,
-    folderId: row.folder_id,
-    url: row.url || void 0,
-    favicon: row.favicon || void 0,
-    description: row.description || void 0,
-    language: row.language || void 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    id: t.id,
+    title: t.title,
+    content: t.content,
+    type: t.type,
+    folderId: t.folder_id,
+    url: t.url || void 0,
+    favicon: t.favicon || void 0,
+    description: t.description || void 0,
+    language: t.language || void 0,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at
   };
 }
-function registerNoteHandlers() {
-  const db2 = getDatabase();
-  ipcMain.handle(IPC_CHANNELS.NOTE_CREATE, async (_event, note) => {
+function _e() {
+  const t = N();
+  c.handle(i.NOTE_CREATE, async (s, r) => {
     try {
-      const id = v4();
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      const stmt = db2.prepare(`
+      const e = G(), n = (/* @__PURE__ */ new Date()).toISOString();
+      t.prepare(`
         INSERT INTO notes (id, title, content, type, folder_id, url, favicon, description, language, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        id,
-        note.title || "无标题",
-        note.content || "",
-        note.type || "markdown",
-        note.folderId || null,
-        note.url || null,
-        note.favicon || null,
-        note.description || null,
-        note.language || null,
-        now,
-        now
+      `).run(
+        e,
+        r.title || "无标题",
+        r.content || "",
+        r.type || "markdown",
+        r.folderId || null,
+        r.url || null,
+        r.favicon || null,
+        r.description || null,
+        r.language || null,
+        n,
+        n
       );
-      const created = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
-      if (globalContext.currentWorkspace) {
-        const filename = `${created.title}.md`;
-        const filePath = path.join(globalContext.currentWorkspace, filename);
+      const o = t.prepare("SELECT * FROM notes WHERE id = ?").get(e);
+      if (f.currentWorkspace) {
+        const l = `${o.title}.md`, E = L.join(f.currentWorkspace, l);
         try {
-          fs.writeFileSync(filePath, created.content || "", "utf-8");
-          console.log("[Main] Created file:", filePath);
-        } catch (e) {
-          console.error("[Main] Create file failed:", e);
+          S.writeFileSync(E, o.content || "", "utf-8"), console.log("[Main] Created file:", E);
+        } catch (d) {
+          console.error("[Main] Create file failed:", d);
         }
       }
-      return { success: true, data: rowToNote(created) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: F(o) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.NOTE_UPDATE, async (_event, id, updates) => {
+  }), c.handle(i.NOTE_UPDATE, async (s, r, e) => {
     try {
-      const existing = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
-      if (!existing) {
-        return { success: false, error: "Note not found" };
-      }
-      const fields = [];
-      const values = [];
-      if (updates.title !== void 0) {
-        fields.push("title = ?");
-        values.push(updates.title);
-      }
-      if (updates.content !== void 0) {
-        fields.push("content = ?");
-        values.push(updates.content);
-      }
-      if (updates.folderId !== void 0) {
-        fields.push("folder_id = ?");
-        values.push(updates.folderId);
-      }
-      if (updates.url !== void 0) {
-        fields.push("url = ?");
-        values.push(updates.url);
-      }
-      if (updates.favicon !== void 0) {
-        fields.push("favicon = ?");
-        values.push(updates.favicon);
-      }
-      if (updates.description !== void 0) {
-        fields.push("description = ?");
-        values.push(updates.description);
-      }
-      if (updates.language !== void 0) {
-        fields.push("language = ?");
-        values.push(updates.language);
-      }
-      fields.push("updated_at = ?");
-      values.push((/* @__PURE__ */ new Date()).toISOString());
-      values.push(id);
-      const stmt = db2.prepare(`UPDATE notes SET ${fields.join(", ")} WHERE id = ?`);
-      stmt.run(...values);
-      const updated = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
-      if (globalContext.currentWorkspace && updated) {
-        const filename = `${updated.title}.md`;
-        const filePath = path.join(globalContext.currentWorkspace, filename);
-        if (updates.title !== void 0 && updates.title !== existing.title) {
-          const oldPath = path.join(globalContext.currentWorkspace, `${existing.title}.md`);
+      const n = t.prepare("SELECT * FROM notes WHERE id = ?").get(r);
+      if (!n)
+        return { success: !1, error: "Note not found" };
+      const a = [], o = [];
+      e.title !== void 0 && (a.push("title = ?"), o.push(e.title)), e.content !== void 0 && (a.push("content = ?"), o.push(e.content)), e.folderId !== void 0 && (a.push("folder_id = ?"), o.push(e.folderId)), e.url !== void 0 && (a.push("url = ?"), o.push(e.url)), e.favicon !== void 0 && (a.push("favicon = ?"), o.push(e.favicon)), e.description !== void 0 && (a.push("description = ?"), o.push(e.description)), e.language !== void 0 && (a.push("language = ?"), o.push(e.language)), a.push("updated_at = ?"), o.push((/* @__PURE__ */ new Date()).toISOString()), o.push(r), t.prepare(`UPDATE notes SET ${a.join(", ")} WHERE id = ?`).run(...o);
+      const E = t.prepare("SELECT * FROM notes WHERE id = ?").get(r);
+      if (f.currentWorkspace && E) {
+        const d = `${E.title}.md`, _ = L.join(f.currentWorkspace, d);
+        if (e.title !== void 0 && e.title !== n.title) {
+          const u = L.join(f.currentWorkspace, `${n.title}.md`);
           try {
-            if (fs.existsSync(oldPath)) {
-              fs.renameSync(oldPath, filePath);
-              console.log("[Main] Renamed file:", oldPath, "->", filePath);
-            }
-          } catch (e) {
-            console.error("[Main] Rename failed:", e);
+            S.existsSync(u) && (S.renameSync(u, _), console.log("[Main] Renamed file:", u, "->", _));
+          } catch (R) {
+            console.error("[Main] Rename failed:", R);
           }
         }
-        if (updates.content !== void 0) {
+        if (e.content !== void 0)
           try {
-            fs.writeFileSync(filePath, updates.content, "utf-8");
-            console.log("[Main] Saved file:", filePath);
-          } catch (e) {
-            console.error("[Main] Save failed:", e);
+            S.writeFileSync(_, e.content, "utf-8"), console.log("[Main] Saved file:", _);
+          } catch (u) {
+            console.error("[Main] Save failed:", u);
           }
-        }
       }
-      return { success: true, data: rowToNote(updated) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: F(E) };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.NOTE_DELETE, async (_event, id) => {
+  }), c.handle(i.NOTE_DELETE, async (s, r) => {
     try {
-      const existing = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
-      if (globalContext.currentWorkspace && existing) {
-        const filePath = path.join(globalContext.currentWorkspace, `${existing.title}.md`);
+      const e = t.prepare("SELECT * FROM notes WHERE id = ?").get(r);
+      if (f.currentWorkspace && e) {
+        const n = L.join(f.currentWorkspace, `${e.title}.md`);
         try {
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log("[Main] Deleted file:", filePath);
-          }
-        } catch (e) {
-          console.error("[Main] Delete file failed:", e);
+          S.existsSync(n) && (S.unlinkSync(n), console.log("[Main] Deleted file:", n));
+        } catch (a) {
+          console.error("[Main] Delete file failed:", a);
         }
       }
-      db2.prepare("DELETE FROM notes WHERE id = ?").run(id);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return t.prepare("DELETE FROM notes WHERE id = ?").run(r), { success: !0 };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.NOTE_GET, async (_event, id) => {
+  }), c.handle(i.NOTE_GET, async (s, r) => {
     try {
-      const row = db2.prepare("SELECT * FROM notes WHERE id = ?").get(id);
-      if (row) {
-        return { success: true, data: rowToNote(row) };
-      }
-      return { success: false, error: "Note not found" };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      const e = t.prepare("SELECT * FROM notes WHERE id = ?").get(r);
+      return e ? { success: !0, data: F(e) } : { success: !1, error: "Note not found" };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.NOTE_LIST, async (_event, filters = {}) => {
+  }), c.handle(i.NOTE_LIST, async (s, r = {}) => {
     try {
-      let sql = "SELECT * FROM notes WHERE 1=1";
-      const params = [];
-      if (filters.type) {
-        sql += " AND type = ?";
-        params.push(filters.type);
-      }
-      if (filters.folderId !== void 0) {
-        if (filters.folderId === null) {
-          sql += " AND folder_id IS NULL";
-        } else {
-          sql += " AND folder_id = ?";
-          params.push(filters.folderId);
-        }
-      }
-      sql += " ORDER BY updated_at DESC";
-      const rows = db2.prepare(sql).all(...params);
-      return { success: true, data: rows.map(rowToNote) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      let e = "SELECT * FROM notes WHERE 1=1";
+      const n = [];
+      return r.type && (e += " AND type = ?", n.push(r.type)), r.folderId !== void 0 && (r.folderId === null ? e += " AND folder_id IS NULL" : (e += " AND folder_id = ?", n.push(r.folderId))), e += " ORDER BY updated_at DESC", { success: !0, data: t.prepare(e).all(...n).map(F) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.NOTE_SEARCH, async (_event, query) => {
+  }), c.handle(i.NOTE_SEARCH, async (s, r) => {
     try {
-      if (!query || query.trim() === "") {
-        return { success: true, data: [] };
-      }
-      const searchTerm = `%${query}%`;
-      const rows = db2.prepare(`
+      if (!r || r.trim() === "")
+        return { success: !0, data: [] };
+      const e = `%${r}%`;
+      return { success: !0, data: t.prepare(`
         SELECT * FROM notes 
         WHERE title LIKE ? OR content LIKE ?
         ORDER BY updated_at DESC
         LIMIT 50
-      `).all(searchTerm, searchTerm);
-      const results = rows.map((row) => {
-        let snippet = (row.content || "").slice(0, 150);
-        if (row.content && row.content.toLowerCase().includes(query.toLowerCase())) {
-          const idx = row.content.toLowerCase().indexOf(query.toLowerCase());
-          const start = Math.max(0, idx - 40);
-          const end = Math.min(row.content.length, idx + 80);
-          snippet = (start > 0 ? "..." : "") + row.content.slice(start, end) + (end < row.content.length ? "..." : "");
+      `).all(e, e).map((o) => {
+        let l = (o.content || "").slice(0, 150);
+        if (o.content && o.content.toLowerCase().includes(r.toLowerCase())) {
+          const d = o.content.toLowerCase().indexOf(r.toLowerCase()), _ = Math.max(0, d - 40), u = Math.min(o.content.length, d + 80);
+          l = (_ > 0 ? "..." : "") + o.content.slice(_, u) + (u < o.content.length ? "..." : "");
         }
-        const matchField = row.title.toLowerCase().includes(query.toLowerCase()) ? "标题" : "内容";
+        const E = o.title.toLowerCase().includes(r.toLowerCase()) ? "标题" : "内容";
         return {
-          note: rowToNote(row),
-          matchField,
-          contentSnippet: snippet,
+          note: F(o),
+          matchField: E,
+          contentSnippet: l,
           score: 0
         };
-      });
-      return { success: true, data: results };
-    } catch (error) {
-      console.error("Search error:", error);
-      return { success: false, error: String(error) };
+      }) };
+    } catch (e) {
+      return console.error("Search error:", e), { success: !1, error: String(e) };
     }
   });
 }
-function rowToFolder(row) {
+function H(t) {
   return {
-    id: row.id,
-    name: row.name,
-    parentId: row.parent_id,
-    sortOrder: row.sort_order
+    id: t.id,
+    name: t.name,
+    parentId: t.parent_id,
+    sortOrder: t.sort_order
   };
 }
-function registerFolderHandlers() {
-  const db2 = getDatabase();
-  ipcMain.handle(IPC_CHANNELS.FOLDER_CREATE, async (_event, folder) => {
+function w(t, s) {
+  const r = f.currentWorkspace;
+  if (!r) return null;
+  const e = [];
+  let n = s;
+  for (; n; ) {
+    const a = t.prepare("SELECT id, name, parent_id FROM folders WHERE id = ?").get(n);
+    if (!a) break;
+    e.unshift(a.name), n = a.parent_id;
+  }
+  return I.join(r, ...e);
+}
+function pe() {
+  const t = N();
+  c.handle(i.FOLDER_CREATE, async (s, r) => {
     try {
-      const id = v4();
-      const maxOrder = folder.parentId ? db2.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id = ?").get(folder.parentId) : db2.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id IS NULL").get();
-      const sortOrder = ((maxOrder == null ? void 0 : maxOrder.max_order) ?? -1) + 1;
-      const stmt = db2.prepare(`
+      const e = G(), n = r.parentId ? t.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id = ?").get(r.parentId) : t.prepare("SELECT COALESCE(MAX(sort_order), -1) as max_order FROM folders WHERE parent_id IS NULL").get(), a = ((n == null ? void 0 : n.max_order) ?? -1) + 1;
+      t.prepare(`
         INSERT INTO folders (id, name, parent_id, sort_order)
         VALUES (?, ?, ?, ?)
-      `);
-      stmt.run(id, folder.name || "新文件夹", folder.parentId || null, sortOrder);
-      const created = db2.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-      return { success: true, data: rowToFolder(created) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      `).run(e, r.name || "新文件夹", r.parentId || null, a);
+      const l = w(t, e);
+      l && !y.existsSync(l) && y.mkdirSync(l, { recursive: !0 });
+      const E = t.prepare("SELECT * FROM folders WHERE id = ?").get(e);
+      return { success: !0, data: H(E) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.FOLDER_UPDATE, async (_event, id, updates) => {
+  }), c.handle(i.FOLDER_UPDATE, async (s, r, e) => {
     try {
-      const fields = [];
-      const values = [];
-      if (updates.name !== void 0) {
-        fields.push("name = ?");
-        values.push(updates.name);
+      let n = null;
+      e.name !== void 0 && (n = w(t, r));
+      const a = [], o = [];
+      if (e.name !== void 0 && (a.push("name = ?"), o.push(e.name)), e.parentId !== void 0 && (a.push("parent_id = ?"), o.push(e.parentId)), e.sortOrder !== void 0 && (a.push("sort_order = ?"), o.push(e.sortOrder)), a.length === 0) {
+        const d = t.prepare("SELECT * FROM folders WHERE id = ?").get(r);
+        return { success: !0, data: H(d) };
       }
-      if (updates.parentId !== void 0) {
-        fields.push("parent_id = ?");
-        values.push(updates.parentId);
+      if (o.push(r), t.prepare(`UPDATE folders SET ${a.join(", ")} WHERE id = ?`).run(...o), n && e.name !== void 0) {
+        const d = w(t, r);
+        d && n !== d && y.existsSync(n) && y.renameSync(n, d);
       }
-      if (updates.sortOrder !== void 0) {
-        fields.push("sort_order = ?");
-        values.push(updates.sortOrder);
-      }
-      if (fields.length === 0) {
-        const existing = db2.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-        return { success: true, data: rowToFolder(existing) };
-      }
-      values.push(id);
-      const stmt = db2.prepare(`UPDATE folders SET ${fields.join(", ")} WHERE id = ?`);
-      stmt.run(...values);
-      const updated = db2.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-      return { success: true, data: rowToFolder(updated) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      const E = t.prepare("SELECT * FROM folders WHERE id = ?").get(r);
+      return { success: !0, data: H(E) };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.FOLDER_DELETE, async (_event, id) => {
+  }), c.handle(i.FOLDER_DELETE, async (s, r) => {
     try {
-      db2.prepare("DELETE FROM folders WHERE id = ?").run(id);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      const e = w(t, r);
+      return t.prepare("DELETE FROM folders WHERE id = ?").run(r), e && y.existsSync(e) && y.rmSync(e, { recursive: !0, force: !0 }), { success: !0 };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.FOLDER_LIST, async () => {
+  }), c.handle(i.FOLDER_LIST, async () => {
     try {
-      const rows = db2.prepare("SELECT * FROM folders ORDER BY sort_order").all();
-      return { success: true, data: rows.map(rowToFolder) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: t.prepare("SELECT * FROM folders ORDER BY sort_order").all().map(H) };
+    } catch (s) {
+      return { success: !1, error: String(s) };
     }
   });
 }
-function rowToTag(row) {
+function P(t) {
   return {
-    id: row.id,
-    name: row.name,
-    color: row.color
+    id: t.id,
+    name: t.name,
+    color: t.color
   };
 }
-const TAG_COLORS = [
+const j = [
   "#409EFF",
   // 蓝色
   "#67C23A",
@@ -527,320 +422,250 @@ const TAG_COLORS = [
   "#E91E63"
   // 粉色
 ];
-function registerTagHandlers() {
-  const db2 = getDatabase();
-  ipcMain.handle(IPC_CHANNELS.TAG_CREATE, async (_event, tag) => {
+function Se() {
+  const t = N();
+  c.handle(i.TAG_CREATE, async (s, r) => {
     try {
-      const id = v4();
-      const color = tag.color || TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-      const stmt = db2.prepare(`
+      const e = G(), n = r.color || j[Math.floor(Math.random() * j.length)];
+      t.prepare(`
         INSERT INTO tags (id, name, color)
         VALUES (?, ?, ?)
-      `);
-      stmt.run(id, tag.name, color);
-      const created = db2.prepare("SELECT * FROM tags WHERE id = ?").get(id);
-      return { success: true, data: rowToTag(created) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      `).run(e, r.name, n);
+      const o = t.prepare("SELECT * FROM tags WHERE id = ?").get(e);
+      return { success: !0, data: P(o) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.TAG_UPDATE, async (_event, id, updates) => {
+  }), c.handle(i.TAG_UPDATE, async (s, r, e) => {
     try {
-      const fields = [];
-      const values = [];
-      if (updates.name !== void 0) {
-        fields.push("name = ?");
-        values.push(updates.name);
+      const n = [], a = [];
+      if (e.name !== void 0 && (n.push("name = ?"), a.push(e.name)), e.color !== void 0 && (n.push("color = ?"), a.push(e.color)), n.length === 0) {
+        const E = t.prepare("SELECT * FROM tags WHERE id = ?").get(r);
+        return { success: !0, data: P(E) };
       }
-      if (updates.color !== void 0) {
-        fields.push("color = ?");
-        values.push(updates.color);
-      }
-      if (fields.length === 0) {
-        const existing = db2.prepare("SELECT * FROM tags WHERE id = ?").get(id);
-        return { success: true, data: rowToTag(existing) };
-      }
-      values.push(id);
-      const stmt = db2.prepare(`UPDATE tags SET ${fields.join(", ")} WHERE id = ?`);
-      stmt.run(...values);
-      const updated = db2.prepare("SELECT * FROM tags WHERE id = ?").get(id);
-      return { success: true, data: rowToTag(updated) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      a.push(r), t.prepare(`UPDATE tags SET ${n.join(", ")} WHERE id = ?`).run(...a);
+      const l = t.prepare("SELECT * FROM tags WHERE id = ?").get(r);
+      return { success: !0, data: P(l) };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.TAG_DELETE, async (_event, id) => {
+  }), c.handle(i.TAG_DELETE, async (s, r) => {
     try {
-      db2.prepare("DELETE FROM tags WHERE id = ?").run(id);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return t.prepare("DELETE FROM tags WHERE id = ?").run(r), { success: !0 };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.TAG_LIST, async () => {
+  }), c.handle(i.TAG_LIST, async () => {
     try {
-      const rows = db2.prepare("SELECT * FROM tags ORDER BY name").all();
-      return { success: true, data: rows.map(rowToTag) };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: t.prepare("SELECT * FROM tags ORDER BY name").all().map(P) };
+    } catch (s) {
+      return { success: !1, error: String(s) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.TAG_ADD_TO_NOTE, async (_event, noteId, tagId) => {
+  }), c.handle(i.TAG_ADD_TO_NOTE, async (s, r, e) => {
     try {
-      const stmt = db2.prepare(`
+      return t.prepare(`
         INSERT OR IGNORE INTO note_tags (note_id, tag_id)
         VALUES (?, ?)
-      `);
-      stmt.run(noteId, tagId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      `).run(r, e), { success: !0 };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.TAG_REMOVE_FROM_NOTE, async (_event, noteId, tagId) => {
+  }), c.handle(i.TAG_REMOVE_FROM_NOTE, async (s, r, e) => {
     try {
-      db2.prepare("DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?").run(noteId, tagId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return t.prepare("DELETE FROM note_tags WHERE note_id = ? AND tag_id = ?").run(r, e), { success: !0 };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
   });
 }
-function registerLinkHandlers() {
-  const db2 = getDatabase();
-  ipcMain.handle(IPC_CHANNELS.LINK_CREATE, async (_event, sourceId, targetId) => {
+function Re() {
+  const t = N();
+  c.handle(i.LINK_CREATE, async (s, r, e) => {
     try {
-      const stmt = db2.prepare(`
+      return t.prepare(`
         INSERT OR IGNORE INTO links (source_id, target_id)
         VALUES (?, ?)
-      `);
-      stmt.run(sourceId, targetId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      `).run(r, e), { success: !0 };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.LINK_DELETE, async (_event, sourceId, targetId) => {
+  }), c.handle(i.LINK_DELETE, async (s, r, e) => {
     try {
-      db2.prepare("DELETE FROM links WHERE source_id = ? AND target_id = ?").run(sourceId, targetId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return t.prepare("DELETE FROM links WHERE source_id = ? AND target_id = ?").run(r, e), { success: !0 };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.LINK_GET_BY_NOTE, async (_event, noteId) => {
+  }), c.handle(i.LINK_GET_BY_NOTE, async (s, r) => {
     try {
-      const outLinks = db2.prepare(`
+      const e = t.prepare(`
         SELECT n.id, n.title, n.type
         FROM links l
         JOIN notes n ON n.id = l.target_id
         WHERE l.source_id = ?
-      `).all(noteId);
-      const inLinks = db2.prepare(`
+      `).all(r), n = t.prepare(`
         SELECT n.id, n.title, n.type
         FROM links l
         JOIN notes n ON n.id = l.source_id
         WHERE l.target_id = ?
-      `).all(noteId);
+      `).all(r);
       return {
-        success: true,
+        success: !0,
         data: {
-          outLinks: outLinks.map((n) => ({ id: n.id, title: n.title, type: n.type })),
-          inLinks: inLinks.map((n) => ({ id: n.id, title: n.title, type: n.type }))
+          outLinks: e.map((a) => ({ id: a.id, title: a.title, type: a.type })),
+          inLinks: n.map((a) => ({ id: a.id, title: a.title, type: a.type }))
         }
       };
-    } catch (error) {
-      return { success: false, error: String(error) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.LINK_GET_GRAPH, async () => {
+  }), c.handle(i.LINK_GET_GRAPH, async () => {
     try {
-      const notes = db2.prepare(`
+      const s = t.prepare(`
         SELECT id, title, type FROM notes
-      `).all();
-      const links = db2.prepare(`
+      `).all(), e = t.prepare(`
         SELECT source_id, target_id FROM links
-      `).all();
-      const nodes = notes.map((n) => ({
-        id: n.id,
-        label: n.title,
-        type: n.type
+      `).all().map((n) => ({
+        source: n.source_id,
+        target: n.target_id
       }));
-      const edges = links.map((l) => ({
-        source: l.source_id,
-        target: l.target_id
-      }));
-      return { success: true, data: edges };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: { nodes: s.map((n) => ({ id: n.id, label: n.title, type: n.type })), edges: e } };
+    } catch (s) {
+      return { success: !1, error: String(s) };
     }
   });
 }
-function registerSettingsHandlers() {
-  const db2 = getDatabase();
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async () => {
+function fe() {
+  const t = N();
+  c.handle(i.SETTINGS_GET, async () => {
     try {
-      const rows = db2.prepare("SELECT key, value FROM settings").all();
-      const settings = {};
-      rows.forEach((row) => {
+      const s = t.prepare("SELECT key, value FROM settings").all(), r = {};
+      return s.forEach((e) => {
         try {
-          settings[row.key] = JSON.parse(row.value);
+          r[e.key] = JSON.parse(e.value);
         } catch {
-          settings[row.key] = row.value;
+          r[e.key] = e.value;
         }
-      });
-      return { success: true, data: settings };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      }), { success: !0, data: r };
+    } catch (s) {
+      return { success: !1, error: String(s) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, async (_event, settings) => {
+  }), c.handle(i.SETTINGS_SET, async (s, r) => {
     try {
-      const stmt = db2.prepare(`
+      const e = t.prepare(`
         INSERT OR REPLACE INTO settings (key, value)
         VALUES (?, ?)
       `);
-      Object.entries(settings).forEach(([key, value]) => {
-        stmt.run(key, JSON.stringify(value));
-      });
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return Object.entries(r).forEach(([n, a]) => {
+        e.run(n, JSON.stringify(a));
+      }), { success: !0 };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
   });
 }
-let activeRequest = null;
-function getAIConfig() {
-  const db2 = getDatabase();
-  const rows = db2.prepare("SELECT key, value FROM settings WHERE key LIKE ?").all("ai_%");
-  const config = {};
-  rows.forEach((r) => {
+let v = null;
+function z() {
+  const s = N().prepare("SELECT key, value FROM settings WHERE key LIKE ?").all("ai_%"), r = {};
+  return s.forEach((e) => {
     try {
-      config[r.key] = JSON.parse(r.value);
+      r[e.key] = JSON.parse(e.value);
     } catch {
-      config[r.key] = r.value;
+      r[e.key] = e.value;
     }
-  });
-  return {
-    baseUrl: config["ai_base_url"] || "https://api.deepseek.com",
-    apiKey: config["ai_api_key"] || "sk-376363b4a79e4bb5ae5f329706efc0f4",
-    model: config["ai_model"] || "deepseek-chat"
+  }), {
+    baseUrl: r.ai_base_url || "https://api.deepseek.com",
+    apiKey: r.ai_api_key || "sk-376363b4a79e4bb5ae5f329706efc0f4",
+    model: r.ai_model || "deepseek-chat"
   };
 }
-async function aiChat(messages, systemPrompt) {
-  const config = getAIConfig();
-  const allMessages = [];
-  if (systemPrompt) {
-    allMessages.push({ role: "system", content: systemPrompt });
-  }
-  allMessages.push(...messages);
-  const body = JSON.stringify({
-    model: config.model,
-    messages: allMessages,
+async function O(t, s) {
+  const r = z(), e = [];
+  s && e.push({ role: "system", content: s }), e.push(...t);
+  const n = JSON.stringify({
+    model: r.model,
+    messages: e,
     temperature: 0.7,
     max_tokens: 2048
   });
-  return new Promise((resolve, reject) => {
-    const url = new URL(config.baseUrl.replace(/\/$/, "") + "/chat/completions");
-    const isHttps = url.protocol === "https:";
-    const transport = isHttps ? https : http;
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
+  return new Promise((a, o) => {
+    const l = new URL(r.baseUrl.replace(/\/$/, "") + "/chat/completions"), E = l.protocol === "https:", _ = (E ? $ : J).request({
+      hostname: l.hostname,
+      port: l.port || (E ? 443 : 80),
+      path: l.pathname + l.search,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${config.apiKey}`
+        Authorization: `Bearer ${r.apiKey}`
       }
-    }, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk.toString();
-      });
-      res.on("end", () => {
-        var _a, _b, _c;
+    }, (u) => {
+      let R = "";
+      u.on("data", (h) => {
+        R += h.toString();
+      }), u.on("end", () => {
+        var h, M, D;
         try {
-          const json = JSON.parse(data);
-          if (json.error) {
-            reject(new Error(json.error.message || JSON.stringify(json.error)));
+          const g = JSON.parse(R);
+          if (g.error) {
+            o(new Error(g.error.message || JSON.stringify(g.error)));
             return;
           }
-          resolve(((_c = (_b = (_a = json.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "");
-        } catch (e) {
-          reject(new Error("AI 响应解析失败: " + data.slice(0, 200)));
+          a(((D = (M = (h = g.choices) == null ? void 0 : h[0]) == null ? void 0 : M.message) == null ? void 0 : D.content) || "");
+        } catch {
+          o(new Error("AI 响应解析失败: " + R.slice(0, 200)));
         }
       });
     });
-    activeRequest = req;
-    req.on("error", (e) => reject(new Error("AI 请求失败: " + e.message)));
-    req.write(body);
-    req.end();
+    v = _, _.on("error", (u) => o(new Error("AI 请求失败: " + u.message))), _.write(n), _.end();
   });
 }
-async function aiChatStream(messages, systemPrompt, onChunk, onDone, onError) {
-  const config = getAIConfig();
-  const allMessages = [];
-  if (systemPrompt) {
-    allMessages.push({ role: "system", content: systemPrompt });
-  }
-  allMessages.push(...messages);
-  const body = JSON.stringify({
-    model: config.model,
-    messages: allMessages,
+async function Ie(t, s, r, e, n) {
+  const a = z(), o = [];
+  s && o.push({ role: "system", content: s }), o.push(...t);
+  const l = JSON.stringify({
+    model: a.model,
+    messages: o,
     temperature: 0.7,
     max_tokens: 2048,
-    stream: true
-  });
-  const url = new URL(config.baseUrl.replace(/\/$/, "") + "/chat/completions");
-  const isHttps = url.protocol === "https:";
-  const transport = isHttps ? https : http;
-  const req = transport.request({
-    hostname: url.hostname,
-    port: url.port || (isHttps ? 443 : 80),
-    path: url.pathname + url.search,
+    stream: !0
+  }), E = new URL(a.baseUrl.replace(/\/$/, "") + "/chat/completions"), d = E.protocol === "https:", u = (d ? $ : J).request({
+    hostname: E.hostname,
+    port: E.port || (d ? 443 : 80),
+    path: E.pathname + E.search,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`
+      Authorization: `Bearer ${a.apiKey}`
     }
-  }, (res) => {
-    let buffer = "";
-    res.on("data", (chunk) => {
-      var _a, _b, _c;
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith("data: ")) continue;
-        const data = trimmed.slice(6);
-        if (data === "[DONE]") {
-          onDone();
+  }, (R) => {
+    let h = "";
+    R.on("data", (M) => {
+      var g, b, Y;
+      h += M.toString();
+      const D = h.split(`
+`);
+      h = D.pop() || "";
+      for (const ee of D) {
+        const X = ee.trim();
+        if (!X || !X.startsWith("data: ")) continue;
+        const B = X.slice(6);
+        if (B === "[DONE]") {
+          e();
           return;
         }
         try {
-          const json = JSON.parse(data);
-          const content = (_c = (_b = (_a = json.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.delta) == null ? void 0 : _c.content;
-          if (content) onChunk(content);
+          const K = (Y = (b = (g = JSON.parse(B).choices) == null ? void 0 : g[0]) == null ? void 0 : b.delta) == null ? void 0 : Y.content;
+          K && r(K);
         } catch {
         }
       }
-    });
-    res.on("end", () => onDone());
+    }), R.on("end", () => e());
   });
-  activeRequest = req;
-  req.on("error", (e) => onError("AI 请求失败: " + e.message));
-  req.write(body);
-  req.end();
+  v = u, u.on("error", (R) => n("AI 请求失败: " + R.message)), u.write(l), u.end();
 }
-function aiStop() {
-  if (activeRequest) {
-    activeRequest.destroy();
-    activeRequest = null;
-  }
+function he() {
+  v && (v.destroy(), v = null);
 }
-const SYSTEM_PROMPTS = {
+const m = {
   summarize: "你是一个知识库助手。请用简洁的语言总结以下内容，提取核心要点。用中文回答。",
   suggestTags: "你是一个知识库助手。请根据以下内容建议 3-5 个合适的标签。只输出标签名，用逗号分隔，不要其他内容。用中文回答。",
   polish: "你是一个写作助手。请润色以下文字，使其更加通顺、专业，保持原意不变。直接输出润色后的内容，不要其他说明。",
@@ -849,41 +674,38 @@ const SYSTEM_PROMPTS = {
   explain: "你是一个知识库助手。请用通俗易懂的语言解释以下内容。用中文回答。",
   searchEnhance: "你是一个搜索助手。用户想搜索以下内容，请帮忙扩展搜索关键词，生成 3-5 个相关的搜索词。只输出关键词，用逗号分隔。"
 };
-async function aiSummarize(content) {
-  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.summarize);
+async function ge(t) {
+  return O([{ role: "user", content: t }], m.summarize);
 }
-async function aiSuggestTags(content) {
-  const result = await aiChat([{ role: "user", content }], SYSTEM_PROMPTS.suggestTags);
-  return result.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+async function Ae(t) {
+  return (await O([{ role: "user", content: t }], m.suggestTags)).split(/[,，、]/).map((r) => r.trim()).filter(Boolean);
 }
-async function aiPolish(content) {
-  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.polish);
+async function Ne(t) {
+  return O([{ role: "user", content: t }], m.polish);
 }
-async function aiContinue(content) {
-  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.continue);
+async function Oe(t) {
+  return O([{ role: "user", content: t }], m.continue);
 }
-async function aiTranslate(content, lang) {
-  const prompt = SYSTEM_PROMPTS.translate.replace("{lang}", lang);
-  return aiChat([{ role: "user", content }], prompt);
+async function Le(t, s) {
+  const r = m.translate.replace("{lang}", s);
+  return O([{ role: "user", content: t }], r);
 }
-async function aiExplain(content) {
-  return aiChat([{ role: "user", content }], SYSTEM_PROMPTS.explain);
+async function me(t) {
+  return O([{ role: "user", content: t }], m.explain);
 }
-async function aiSearchEnhance(query) {
-  const result = await aiChat([{ role: "user", content: query }], SYSTEM_PROMPTS.searchEnhance);
-  return result.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+async function ye(t) {
+  return (await O([{ role: "user", content: t }], m.searchEnhance)).split(/[,，、]/).map((r) => r.trim()).filter(Boolean);
 }
-function registerAIHandlers() {
-  const db2 = getDatabase();
-  db2.exec(`
+function Ce() {
+  const t = N();
+  t.exec(`
     CREATE TABLE IF NOT EXISTS ai_conversations (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL DEFAULT '新对话',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `);
-  db2.exec(`
+  `), t.exec(`
     CREATE TABLE IF NOT EXISTS ai_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       conversation_id TEXT NOT NULL,
@@ -892,259 +714,182 @@ function registerAIHandlers() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
     )
-  `);
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT, async (_event, messages, systemPrompt) => {
+  `), c.handle(i.AI_CHAT, async (s, r, e) => {
     try {
-      const result = await aiChat(messages, systemPrompt);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await O(r, e) };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT_STREAM, async (event, messages, systemPrompt) => {
+  }), c.handle(i.AI_CHAT_STREAM, async (s, r, e) => {
     try {
-      const win2 = BrowserWindow.fromWebContents(event.sender);
-      await aiChatStream(
-        messages,
-        systemPrompt,
-        (text) => {
-          if (win2 && !win2.isDestroyed()) {
-            win2.webContents.send("ai:stream:chunk", text);
-          }
+      const n = x.fromWebContents(s.sender);
+      return await Ie(
+        r,
+        e,
+        (a) => {
+          n && !n.isDestroyed() && n.webContents.send("ai:stream:chunk", a);
         },
         () => {
-          if (win2 && !win2.isDestroyed()) {
-            win2.webContents.send("ai:stream:done");
-          }
+          n && !n.isDestroyed() && n.webContents.send("ai:stream:done");
         },
-        (err) => {
-          if (win2 && !win2.isDestroyed()) {
-            win2.webContents.send("ai:stream:error", err);
-          }
+        (a) => {
+          n && !n.isDestroyed() && n.webContents.send("ai:stream:error", a);
         }
-      );
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      ), { success: !0 };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_STOP, async () => {
-    aiStop();
-    return { success: true };
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_SUMMARIZE, async (_event, content) => {
+  }), c.handle(i.AI_STOP, async () => (he(), { success: !0 })), c.handle(i.AI_SUMMARIZE, async (s, r) => {
     try {
-      const result = await aiSummarize(content);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await ge(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_SUGGEST_TAGS, async (_event, content) => {
+  }), c.handle(i.AI_SUGGEST_TAGS, async (s, r) => {
     try {
-      const result = await aiSuggestTags(content);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await Ae(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_POLISH, async (_event, content) => {
+  }), c.handle(i.AI_POLISH, async (s, r) => {
     try {
-      const result = await aiPolish(content);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await Ne(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CONTINUE, async (_event, content) => {
+  }), c.handle(i.AI_CONTINUE, async (s, r) => {
     try {
-      const result = await aiContinue(content);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await Oe(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_TRANSLATE, async (_event, content, lang) => {
+  }), c.handle(i.AI_TRANSLATE, async (s, r, e) => {
     try {
-      const result = await aiTranslate(content, lang);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await Le(r, e) };
+    } catch (n) {
+      return { success: !1, error: String(n) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_EXPLAIN, async (_event, content) => {
+  }), c.handle(i.AI_EXPLAIN, async (s, r) => {
     try {
-      const result = await aiExplain(content);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await me(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_SEARCH_ENHANCE, async (_event, query) => {
+  }), c.handle(i.AI_SEARCH_ENHANCE, async (s, r) => {
     try {
-      const result = await aiSearchEnhance(query);
-      return { success: true, data: result };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: await ye(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_LIST, async () => {
+  }), c.handle(i.AI_CHAT_HISTORY_LIST, async () => {
     try {
-      const rows = db2.prepare("SELECT * FROM ai_conversations ORDER BY updated_at DESC").all();
-      return { success: true, data: rows };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: t.prepare("SELECT * FROM ai_conversations ORDER BY updated_at DESC").all() };
+    } catch (s) {
+      return { success: !1, error: String(s) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_GET, async (_event, conversationId) => {
+  }), c.handle(i.AI_CHAT_HISTORY_GET, async (s, r) => {
     try {
-      const messages = db2.prepare("SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC").all(conversationId);
-      return { success: true, data: messages };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return { success: !0, data: t.prepare("SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY created_at ASC").all(r) };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_SAVE, async (_event, conversationId, title, messages) => {
+  }), c.handle(i.AI_CHAT_HISTORY_SAVE, async (s, r, e, n) => {
     try {
-      db2.prepare(`
+      t.prepare(`
         INSERT INTO ai_conversations (id, title, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET title = ?, updated_at = CURRENT_TIMESTAMP
-      `).run(conversationId, title, title);
-      db2.prepare("DELETE FROM ai_messages WHERE conversation_id = ?").run(conversationId);
-      const insert = db2.prepare("INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, ?, ?)");
-      for (const msg of messages) {
-        insert.run(conversationId, msg.role, msg.content);
-      }
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      `).run(r, e, e), t.prepare("DELETE FROM ai_messages WHERE conversation_id = ?").run(r);
+      const a = t.prepare("INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, ?, ?)");
+      for (const o of n)
+        a.run(r, o.role, o.content);
+      return { success: !0 };
+    } catch (a) {
+      return { success: !1, error: String(a) };
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.AI_CHAT_HISTORY_DELETE, async (_event, conversationId) => {
+  }), c.handle(i.AI_CHAT_HISTORY_DELETE, async (s, r) => {
     try {
-      db2.prepare("DELETE FROM ai_conversations WHERE id = ?").run(conversationId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
+      return t.prepare("DELETE FROM ai_conversations WHERE id = ?").run(r), { success: !0 };
+    } catch (e) {
+      return { success: !1, error: String(e) };
     }
   });
 }
-function registerDialogHandlers() {
-  ipcMain.handle("dialog:openDirectory", async () => {
-    const result = await dialog.showOpenDialog({
+function De() {
+  c.handle("dialog:openDirectory", async () => {
+    const t = await te.showOpenDialog({
       properties: ["openDirectory", "createDirectory"]
     });
-    if (result.canceled) {
-      return null;
-    }
-    return result.filePaths[0];
-  });
-  ipcMain.handle("workspace:set", async (_event, workspacePath) => {
-    console.log("[Main] Setting workspace:", workspacePath);
-    globalContext.currentWorkspace = workspacePath;
+    return t.canceled ? null : t.filePaths[0];
+  }), c.handle("workspace:set", async (t, s) => {
+    console.log("[Main] Setting workspace:", s), f.currentWorkspace = s;
     try {
-      if (!fs.existsSync(workspacePath)) return false;
-      const db2 = getDatabase();
-      const files = fs.readdirSync(workspacePath);
-      const mdFiles = files.filter((f) => f.endsWith(".md"));
-      console.log(`[Main] Found ${mdFiles.length} markdown files to sync`);
-      const now = (/* @__PURE__ */ new Date()).toISOString();
-      for (const file of mdFiles) {
-        const title = path.basename(file, ".md");
-        const content = fs.readFileSync(path.join(workspacePath, file), "utf-8");
-        const existing = db2.prepare("SELECT id FROM notes WHERE title = ?").get(title);
-        if (!existing) {
-          const id = v4();
-          db2.prepare(`
+      if (!S.existsSync(s)) return !1;
+      const r = N(), n = S.readdirSync(s).filter((o) => o.endsWith(".md"));
+      console.log(`[Main] Found ${n.length} markdown files to sync`);
+      const a = (/* @__PURE__ */ new Date()).toISOString();
+      for (const o of n) {
+        const l = L.basename(o, ".md"), E = S.readFileSync(L.join(s, o), "utf-8");
+        if (!r.prepare("SELECT id FROM notes WHERE title = ?").get(l)) {
+          const _ = G();
+          r.prepare(`
             INSERT INTO notes (id, title, content, type, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).run(id, title, content, "markdown", now, now);
-          console.log(`[Main] Imported note: ${title}`);
-        } else {
+          `).run(_, l, E, "markdown", a, a), console.log(`[Main] Imported note: ${l}`);
         }
       }
-      return true;
-    } catch (e) {
-      console.error("[Main] Sync failed:", e);
-      return false;
+      return !0;
+    } catch (r) {
+      return console.error("[Main] Sync failed:", r), !1;
     }
-  });
-  ipcMain.handle(IPC_CHANNELS.SYSTEM_REVEAL, async (_event, filePath) => {
+  }), c.handle(i.SYSTEM_REVEAL, async (t, s) => {
     try {
-      if (fs.existsSync(filePath)) {
-        shell.showItemInFolder(filePath);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      console.error("[Main] Reveal failed:", e);
-      return false;
+      return S.existsSync(s) ? (re.showItemInFolder(s), !0) : !1;
+    } catch (r) {
+      return console.error("[Main] Reveal failed:", r), !1;
     }
   });
 }
-function registerAllHandlers() {
-  registerNoteHandlers();
-  registerFolderHandlers();
-  registerTagHandlers();
-  registerLinkHandlers();
-  registerSettingsHandlers();
-  registerAIHandlers();
-  registerDialogHandlers();
+function Fe() {
+  _e(), pe(), Se(), Re(), fe(), Ce(), De();
 }
-createRequire$1(import.meta.url);
-const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path$1.join(__dirname$1, "..");
-const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
-const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
-let win;
-function createWindow() {
-  win = new BrowserWindow({
+const q = I.dirname(ne(import.meta.url));
+process.env.APP_ROOT = I.join(q, "..");
+const W = process.env.VITE_DEV_SERVER_URL, We = I.join(process.env.APP_ROOT, "dist-electron"), Z = I.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = W ? I.join(process.env.APP_ROOT, "public") : Z;
+let A;
+function Q() {
+  A = new x({
     width: 1400,
     height: 900,
     minWidth: 1e3,
     minHeight: 600,
-    icon: path$1.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: I.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: {
-      preload: path$1.join(__dirname$1, "preload.mjs"),
-      nodeIntegration: false,
-      contextIsolation: true
+      preload: I.join(q, "preload.mjs"),
+      nodeIntegration: !1,
+      contextIsolation: !0
     }
-  });
-  win.webContents.on("did-finish-load", () => {
-    win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-  });
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path$1.join(RENDERER_DIST, "index.html"));
-  }
+  }), A.webContents.on("did-finish-load", () => {
+    A == null || A.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  }), W ? A.loadURL(W) : A.loadFile(I.join(Z, "index.html"));
 }
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-    win = null;
-  }
+C.on("window-all-closed", () => {
+  process.platform !== "darwin" && (C.quit(), A = null);
 });
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+C.on("activate", () => {
+  x.getAllWindows().length === 0 && Q();
 });
-app.on("before-quit", () => {
-  closeDatabase();
+C.on("before-quit", () => {
+  le();
 });
-app.whenReady().then(() => {
-  initDatabase();
-  registerAllHandlers();
-  createWindow();
+C.whenReady().then(() => {
+  Ee(), Fe(), Q();
 });
 export {
-  MAIN_DIST,
-  RENDERER_DIST,
-  VITE_DEV_SERVER_URL
+  We as MAIN_DIST,
+  Z as RENDERER_DIST,
+  W as VITE_DEV_SERVER_URL
 };
 //# sourceMappingURL=main.js.map

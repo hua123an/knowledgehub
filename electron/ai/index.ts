@@ -12,7 +12,6 @@ import {
   aiTranslate,
   aiExplain,
   aiSearchEnhance,
-  SYSTEM_PROMPTS,
 } from './service'
 import type { ChatMessage } from './service'
 

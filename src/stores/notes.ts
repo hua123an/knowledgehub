@@ -35,9 +35,9 @@ export const useNotesStore = defineStore('notes', () => {
   })
 
   // Filter Logic
-  const filter = ref<{ tagId?: string, folderId?: string, type?: NoteType }>({})
-  
-  function setFilter(newFilter: { tagId?: string, folderId?: string, type?: NoteType }) {
+  const filter = ref<{ tagId?: string | null, folderId?: string | null, type?: NoteType }>({})
+
+  function setFilter(newFilter: { tagId?: string | null, folderId?: string | null, type?: NoteType }) {
     filter.value = newFilter
   }
 

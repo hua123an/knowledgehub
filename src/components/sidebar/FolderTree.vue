@@ -61,14 +61,12 @@
 
 <script setup lang="ts">
 import { ref, h, defineComponent } from 'vue'
-import { useRouter } from 'vue-router'
 import { Plus, FolderAdd, Folder, FolderOpened, MoreFilled, Edit, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElDropdown, ElDropdownMenu, ElDropdownItem, ElIcon } from 'element-plus'
 import { useFoldersStore } from '@/stores/folders'
 import { useNotesStore } from '@/stores/notes'
 import type { Folder as FolderType } from '@/types'
 
-const router = useRouter()
 const foldersStore = useFoldersStore()
 const notesStore = useNotesStore()
 
@@ -79,7 +77,8 @@ const parentFolderId = ref<string | null>(null)
 const submitting = ref(false)
 
 // 文件夹节点组件
-const FolderNode = defineComponent({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const FolderNode: any = defineComponent({
   name: 'FolderNode',
   props: {
     folder: { type: Object as () => FolderType & { children?: FolderType[] }, required: true },
@@ -88,7 +87,6 @@ const FolderNode = defineComponent({
   emits: ['select', 'create', 'rename', 'delete'],
   setup(props, { emit }) {
     const isExpanded = ref(foldersStore.isExpanded(props.folder.id))
-    const isSelected = ref(foldersStore.currentFolder?.id === props.folder.id)
     
     const hasChildren = props.folder.children && props.folder.children.length > 0
     

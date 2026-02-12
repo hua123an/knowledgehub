@@ -50,7 +50,7 @@ import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const workspaceStore = useWorkspaceStore()
-const recentWorkspaces = ref([]) // TODO: Load from store
+const recentWorkspaces = ref<{ path: string; lastOpened: string }[]>([]) // TODO: Load from store
 
 async function handleOpenFolder() {
   try {

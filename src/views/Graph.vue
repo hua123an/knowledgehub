@@ -58,7 +58,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { FullScreen, Refresh, Close, Loading } from '@element-plus/icons-vue'
-import type { Network, Options, Data, Node, Edge } from 'vis-network'
+import type { Network, Options, Node, Edge } from 'vis-network'
 import { useNotesStore } from '@/stores/notes'
 import { useFoldersStore } from '@/stores/folders'
 
@@ -127,14 +127,14 @@ function renderGraph() {
 
   const visEdges: Edge[] = edges.map((e, i) => ({
     id: `e-${i}`, from: e.source, to: e.target, arrows: 'to',
-    color: { color: '#ccc', opacity: 0.5 }, width: 1, smooth: { type: 'continuous' }
+    color: { color: '#ccc', opacity: 0.5 }, width: 1, smooth: { enabled: true, type: 'continuous', roundness: 0.5 }
   }))
 
   const options: Options = {
     physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -40, springLength: 120, springConstant: 0.08 }, stabilization: { iterations: 150 } },
     interaction: { hover: true, zoomView: true, dragView: true },
     nodes: { borderWidth: 2 },
-    edges: { smooth: { enabled: true, type: 'continuous' } }
+    edges: { smooth: { enabled: true, type: 'continuous', roundness: 0.5 } }
   }
 
   if (network) network.destroy()

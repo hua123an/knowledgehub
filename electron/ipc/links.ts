@@ -84,18 +84,12 @@ export function registerLinkHandlers() {
         SELECT source_id, target_id FROM links
       `).all() as LinkRow[]
 
-      const nodes = notes.map(n => ({
-        id: n.id,
-        label: n.title,
-        type: n.type as 'markdown' | 'bookmark' | 'snippet',
-      }))
-
-        const edges = links.map(l => ({
+      const edges = links.map(l => ({
           source: l.source_id,
           target: l.target_id,
         }))
 
-        return { success: true, data: edges }
+        return { success: true, data: { nodes: notes.map(n => ({ id: n.id, label: n.title, type: n.type as 'markdown' | 'bookmark' | 'snippet' })), edges } }
     } catch (error) {
       return { success: false, error: String(error) }
     }

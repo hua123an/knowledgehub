@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
+declare module 'element-plus/dist/locale/zh-cn.mjs' {
+  import type { Language } from 'element-plus/es/locale'
+  const zhCn: Language
+  export default zhCn
+}
+
 interface Window {
   api: {
     // Note Operations
@@ -24,6 +30,7 @@ interface Window {
 
     // Link Operations
     linkGetGraph: () => Promise<any>;
+    linkGetByNote: (noteId: string) => Promise<any>;
     
     // Tag Operations
     tagList: () => Promise<any>;

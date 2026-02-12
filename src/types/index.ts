@@ -10,6 +10,7 @@ export interface Note {
   folderId: string | null
   createdAt: string
   updatedAt: string
+  tags?: Tag[]
   // 书签特有字段
   url?: string
   favicon?: string

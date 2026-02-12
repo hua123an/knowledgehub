@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -152,7 +152,7 @@ async function loadNoteData() {
       
       // 确保编辑器已初始化
       if (editor.value) {
-        editor.value.commands.setContent(data.content, true) 
+        editor.value.commands.setContent(data.content, { emitUpdate: false })
       }
       
       // 更新 AI 上下文
@@ -262,11 +262,9 @@ function handleSlashMenu(editor: any) {
   
   if (currentLineText.endsWith('/')) {
     const coords = editor.view.coordsAtPos($from.pos)
-    // Adjust position relative to viewport
-    const domRect = editor.view.dom.getBoundingClientRect()
-    menuPosition.value = { 
-      x: coords.left, 
-      y: coords.bottom + 10 
+    menuPosition.value = {
+      x: coords.left,
+      y: coords.bottom + 10
     }
     showSlashMenu.value = true
   } else {
