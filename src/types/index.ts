@@ -146,6 +146,53 @@ export const IPC_CHANNELS = {
   SETTINGS_SET: 'settings:set',
 } as const
 
+// 附件分类
+export type AttachmentCategory = 'image' | 'audio' | 'video' | 'document' | 'other'
+
+// 附件接口
+export interface Attachment {
+  id: string
+  noteId: string
+  filename: string
+  storedName: string
+  mimeType: string
+  category: AttachmentCategory
+  size: number
+  width?: number | null
+  height?: number | null
+  duration?: number | null
+  createdAt: string
+}
+
+// 附件上传参数
+export interface AttachmentUploadParams {
+  noteId: string
+  filename: string
+  buffer: ArrayBuffer
+  mimeType: string
+  category: AttachmentCategory
+  width?: number
+  height?: number
+  duration?: number
+}
+
+// 附件上传结果
+export interface AttachmentUploadResult {
+  id: string
+  storedName: string
+  relativePath: string
+  absolutePath: string
+  url: string
+}
+
+// 文件选择结果
+export interface PickedFile {
+  filename: string
+  buffer: ArrayBuffer
+  mimeType: string
+  size: number
+}
+
 // API 响应类型
 export interface ApiResponse<T> {
   success: boolean

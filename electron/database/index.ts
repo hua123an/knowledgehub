@@ -88,6 +88,22 @@ export function initDatabase(): DatabaseType {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    -- 附件表
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      note_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      category TEXT CHECK(category IN ('image','audio','video','document','other')) NOT NULL,
+      size INTEGER NOT NULL DEFAULT 0,
+      width INTEGER,
+      height INTEGER,
+      duration REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+    );
   `
   
   db.exec(schema)
@@ -139,6 +155,8 @@ export function initDatabase(): DatabaseType {
       CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
       CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);
       CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_id);
+      CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);
+      CREATE INDEX IF NOT EXISTS idx_attachments_category ON attachments(category);
     `)
   } catch (e) {
     // 索引可能已存在

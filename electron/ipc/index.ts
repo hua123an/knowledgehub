@@ -4,7 +4,7 @@ import { registerTagHandlers } from './tags'
 import { registerLinkHandlers } from './links'
 import { registerSettingsHandlers } from './settings'
 import { registerAIHandlers } from '../ai'
-
+import { registerAttachmentHandlers } from './attachments'
 import { registerDialogHandlers } from './dialog'
 
 export function registerAllHandlers() {
@@ -14,5 +14,6 @@ export function registerAllHandlers() {
   registerLinkHandlers()
   registerSettingsHandlers()
   registerAIHandlers()
+  registerAttachmentHandlers()
   registerDialogHandlers()
 }

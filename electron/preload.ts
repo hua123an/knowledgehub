@@ -54,6 +54,15 @@ const api = {
   aiChatHistorySave: (id: string, title: string, messages: any[]) => ipcRenderer.invoke('ai:chatHistorySave', id, title, messages),
   aiChatHistoryDelete: (id: string) => ipcRenderer.invoke('ai:chatHistoryDelete', id),
 
+  // 附件操作
+  attachmentUpload: (params: any) => ipcRenderer.invoke('attachment:upload', params),
+  attachmentDelete: (id: string) => ipcRenderer.invoke('attachment:delete', id),
+  attachmentGet: (id: string) => ipcRenderer.invoke('attachment:get', id),
+  attachmentList: (noteId: string, category?: string) => ipcRenderer.invoke('attachment:list', noteId, category),
+  attachmentGetPath: (id: string) => ipcRenderer.invoke('attachment:getPath', id),
+  attachmentOpen: (id: string) => ipcRenderer.invoke('attachment:open', id),
+  attachmentPickFile: (options?: any) => ipcRenderer.invoke('attachment:pickFile', options),
+
   // AI stream 事件监听
   onAiStreamChunk: (callback: (text: string) => void) => {
     const handler = (_event: any, text: string) => callback(text)

@@ -49,7 +49,7 @@ interface Window {
     // Settings
     settingsGet: () => Promise<any>;
     settingsSet: (settings: any) => Promise<any>;
-    
+
     // AI Operations - simplified signatures for now
     aiChat: (messages: any[], systemPrompt?: string) => Promise<any>;
     aiChatStream: (messages: any[], systemPrompt?: string) => Promise<any>;
@@ -61,7 +61,16 @@ interface Window {
     aiTranslate: (content: string, lang: string) => Promise<any>;
     aiExplain: (content: string) => Promise<any>;
     aiSearchEnhance: (query: string) => Promise<any>;
-    
+
+    // Attachment Operations
+    attachmentUpload: (params: any) => Promise<any>;
+    attachmentDelete: (id: string) => Promise<any>;
+    attachmentGet: (id: string) => Promise<any>;
+    attachmentList: (noteId: string, category?: string) => Promise<any>;
+    attachmentGetPath: (id: string) => Promise<any>;
+    attachmentOpen: (id: string) => Promise<any>;
+    attachmentPickFile: (options?: any) => Promise<any>;
+
     // AI Events
     onAiStreamChunk: (callback: (text: string) => void) => () => void;
     onAiStreamDone: (callback: () => void) => () => void;

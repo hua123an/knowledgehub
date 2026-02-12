@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, protocol } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { initDatabase, closeDatabase } from './database'
@@ -79,6 +79,12 @@ app.on('before-quit', () => {
 })
 
 app.whenReady().then(() => {
+  // 注册 attachment:// 自定义协议
+  protocol.registerFileProtocol('attachment', (request, callback) => {
+    const filePath = decodeURIComponent(request.url.replace('attachment://', ''))
+    callback({ path: filePath })
+  })
+
   // 初始化数据库
   initDatabase()
   // 注册所有 IPC 处理器

@@ -80,7 +80,30 @@
         <div class="menu-item highlight" @click="insertMindMap">
           <span class="icon">🧠</span> 思维导图
         </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" @click="handleSlashImage">
+          <span class="icon">🖼</span> 图片
+        </div>
+        <div class="menu-item" @click="handleSlashAudio">
+          <span class="icon">🎵</span> 音频
+        </div>
+        <div class="menu-item" @click="handleSlashVideo">
+          <span class="icon">🎬</span> 视频
+        </div>
+        <div class="menu-item" @click="handleSlashFile">
+          <span class="icon">📎</span> 文件
+        </div>
+        <div class="menu-item" @click="handleSlashRecording">
+          <span class="icon">🎙</span> 录音
+        </div>
       </div>
+
+      <!-- 录音面板 -->
+      <RecordingPanel
+        ref="recordingPanelRef"
+        @recorded="handleRecorded"
+        @cancel="showRecording = false"
+      />
     </div>
   </div>
 </template>
@@ -97,6 +120,12 @@ import { Delete, Folder } from '@element-plus/icons-vue'
 import { useNotesStore } from '@/stores/notes'
 import { useFoldersStore } from '@/stores/folders'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ImageBlock } from '@/components/editor/extensions/ImageBlock'
+import { AudioBlock } from '@/components/editor/extensions/AudioBlock'
+import { VideoBlock } from '@/components/editor/extensions/VideoBlock'
+import { FileBlock } from '@/components/editor/extensions/FileBlock'
+import { useAttachment } from '@/composables/useAttachment'
+import RecordingPanel from '@/components/editor/RecordingPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,6 +148,9 @@ const showSlashMenu = ref(false)
 const menuPosition = ref({ x: 0, y: 0 })
 const isEditingTitle = ref(false)
 const headerTitleInputRef = ref<HTMLInputElement | null>(null)
+const showRecording = ref(false)
+const recordingPanelRef = ref<InstanceType<typeof RecordingPanel> | null>(null)
+const { handleFileUpload, pickAndUpload, getCategory, uploadFile, insertToEditor } = useAttachment()
 let saveTimer: any = null
 
 const editor = useEditor({
@@ -129,12 +161,44 @@ const editor = useEditor({
     Placeholder.configure({
       placeholder: '输入 / 以使用命令...',
     }),
-    Markdown, // Enable markdown support
+    Markdown,
+    ImageBlock,
+    AudioBlock,
+    VideoBlock,
+    FileBlock,
   ],
   onUpdate: ({ editor }) => {
     handleSlashMenu(editor)
     debouncedSave()
-  }
+  },
+  editorProps: {
+    handleDrop: (_view, event, _slice, moved) => {
+      if (moved || !event.dataTransfer?.files?.length) return false
+      event.preventDefault()
+      const files = Array.from(event.dataTransfer.files)
+      if (noteId.value && editor.value) {
+        handleFileUpload(editor.value, noteId.value, files)
+      }
+      return true
+    },
+    handlePaste: (_view, event) => {
+      const items = event.clipboardData?.items
+      if (!items) return false
+      const imageFiles: File[] = []
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) imageFiles.push(file)
+        }
+      }
+      if (imageFiles.length > 0 && noteId.value && editor.value) {
+        event.preventDefault()
+        handleFileUpload(editor.value, noteId.value, imageFiles)
+        return true
+      }
+      return false
+    },
+  },
 })
 
 // 加载笔记数据
@@ -308,6 +372,58 @@ function insertMindMap() {
    editor.value.commands.deleteRange({ from: editor.value.state.selection.from - 1, to: editor.value.state.selection.from })
    editor.value.commands.insertContent('```mindmap\n# Root\n## Node 1\n## Node 2\n```')
    showSlashMenu.value = false
+}
+
+// Slash Menu: 多媒体插入
+function clearSlash() {
+  if (!editor.value) return
+  editor.value.commands.deleteRange({
+    from: editor.value.state.selection.from - 1,
+    to: editor.value.state.selection.from,
+  })
+  showSlashMenu.value = false
+}
+
+function handleSlashImage() {
+  clearSlash()
+  if (noteId.value && editor.value) {
+    pickAndUpload(editor.value, noteId.value, 'image')
+  }
+}
+
+function handleSlashAudio() {
+  clearSlash()
+  if (noteId.value && editor.value) {
+    pickAndUpload(editor.value, noteId.value, 'audio')
+  }
+}
+
+function handleSlashVideo() {
+  clearSlash()
+  if (noteId.value && editor.value) {
+    pickAndUpload(editor.value, noteId.value, 'video')
+  }
+}
+
+function handleSlashFile() {
+  clearSlash()
+  if (noteId.value && editor.value) {
+    pickAndUpload(editor.value, noteId.value)
+  }
+}
+
+async function handleSlashRecording() {
+  clearSlash()
+  showRecording.value = true
+  await recordingPanelRef.value?.startRecording()
+}
+
+async function handleRecorded(file: File) {
+  showRecording.value = false
+  if (!noteId.value || !editor.value) return
+  const category = getCategory(file.type)
+  const result = await uploadFile(noteId.value, file)
+  insertToEditor(editor.value, result, category, file.name)
 }
 
 // 删除笔记
@@ -520,6 +636,12 @@ onBeforeUnmount(() => {
 .menu-item.highlight .icon {
   background: var(--accent-color);
   color: white;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 6px;
 }
 
 @keyframes slideIn {

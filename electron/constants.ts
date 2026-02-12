@@ -57,6 +57,15 @@ export const IPC_CHANNELS = {
   AI_CHAT_HISTORY_GET: 'ai:chatHistoryGet',
   AI_CHAT_HISTORY_SAVE: 'ai:chatHistorySave',
   AI_CHAT_HISTORY_DELETE: 'ai:chatHistoryDelete',
+  // 附件操作
+  ATTACHMENT_UPLOAD: 'attachment:upload',
+  ATTACHMENT_DELETE: 'attachment:delete',
+  ATTACHMENT_GET: 'attachment:get',
+  ATTACHMENT_LIST: 'attachment:list',
+  ATTACHMENT_GET_PATH: 'attachment:getPath',
+  ATTACHMENT_OPEN: 'attachment:open',
+  ATTACHMENT_PICK_FILE: 'attachment:pickFile',
+
   // 系统
   SYSTEM_REVEAL: 'system:reveal',
 } as const
