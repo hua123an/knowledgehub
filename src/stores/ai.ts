@@ -202,12 +202,18 @@ ${notesCatalog || '(空知识库)'}
 { "type": "batch", "data": { "actions": [ {"type":"update_note","data":{"id":"xxx","content":"整理后的内容"}} ] } }
 :::
 
+12. 联网搜索（获取最新技术资讯、文档、新闻等实时信息）：
+:::action
+{ "type": "web_search", "data": { "query": "搜索关键词(用英文效果更好)" } }
+:::
+
 【重要行为准则】：
 - **主动权**：当用户说"整理一下"时，你应该先执行 list_folders 和 search_notes 了解全局，然后通过 batch 或连续的 update_note/move_note 直接完成，而不是提示用户去操作。
 - **获取 ID**：你可以从之前提供的【笔记目录】中获取笔记 ID。如果目录里没有，先使用 search_notes 查找。
 - **反馈闭环**：当你输出 search_notes 或 list_folders 时，系统会自动把结果作为对话下一轮的输入反馈给你。请在收到系统反馈后继续完成剩下的操作。
 - **避免复制粘贴**：永远优先使用 update_note 修改笔记，而不是让用户自己复制你的回答。
 - **多步操作**：你可以像一个真正的 Agent 一样思考，分步执行：查找 -> 分析 -> 修改 -> 整理。
+- **联网搜索**：当用户询问最新技术、当前事件、需要实时信息、或知识库中没有的外部知识时，主动使用 web_search 获取网络上的最新信息。搜索结果会自动反馈给你，你应基于搜索结果给出回答。
 - 用中文回答。`
 
     let systemPrompt = baseSystemPrompt

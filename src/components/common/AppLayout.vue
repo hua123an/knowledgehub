@@ -74,6 +74,10 @@
           <el-icon><Share /></el-icon>
           <span v-if="!sidebarCollapsed">图谱</span>
         </router-link>
+        <router-link to="/trash" class="nav-item" :class="{ active: route.path === '/trash' }">
+          <el-icon><Delete /></el-icon>
+          <span v-if="!sidebarCollapsed">回收站</span>
+        </router-link>
       </nav>
 
       <!-- 资源管理器 (合并了文件/标签/最近) -->
@@ -88,7 +92,7 @@
         </button>
         <template v-else>
           <ThemeSwitch />
-          <button class="icon-btn" title="设置" @click="showSettings = true">
+          <button class="icon-btn" title="设置" @click="router.push('/settings')">
             <el-icon><Setting /></el-icon>
           </button>
         </template>
@@ -112,6 +116,9 @@
 
     <!-- AI 设置弹窗 -->
     <AISettings v-if="showSettings" @close="showSettings = false" />
+
+    <!-- 命令面板 -->
+    <CommandPalette :visible="showCommandPalette" @close="showCommandPalette = false" @action="handlePaletteAction" />
   </div>
 </template>
 
@@ -119,7 +126,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  HomeFilled, Share, Setting, Fold, Expand, Loading
+  HomeFilled, Share, Setting, Fold, Expand, Loading, Delete
 } from '@element-plus/icons-vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useNotesStore } from '@/stores/notes'
@@ -130,6 +137,7 @@ import SidebarExplorer from './SidebarExplorer.vue'
 import ThemeSwitch from '@/components/common/ThemeSwitch.vue'
 import AIChatPanel from '@/components/ai/AIChatPanel.vue'
 import AISettings from '@/components/ai/AISettings.vue'
+import CommandPalette from '@/components/common/CommandPalette.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -141,6 +149,7 @@ const aiStore = useAIStore()
 
 const sidebarCollapsed = ref(false)
 const showSettings = ref(false)
+const showCommandPalette = ref(false)
 const sidebarSearchText = ref('')
 const searchInputRef = ref<any>(null)
 const showSearchDropdown = ref(false)
@@ -212,12 +221,29 @@ function toggleAIChat() {
   aiStore.chatOpen = !aiStore.chatOpen
 }
 
+async function handlePaletteAction(action: { type: string; payload: any }) {
+  if (action.type === 'navigate') {
+    router.push(action.payload)
+  } else if (action.type === 'openNote') {
+    router.push(`/editor/${action.payload}`)
+  } else if (action.type === 'create') {
+    if (action.payload === 'note') {
+      const note = await notesStore.createNote({ title: '无标题', type: 'markdown' })
+      if (note) router.push(`/editor/${note.id}`)
+    } else if (action.payload === 'folder') {
+      await foldersStore.createFolder({ name: '新文件夹' })
+    }
+  } else if (action.type === 'theme') {
+    settingsStore.setTheme(action.payload)
+  }
+}
+
 onMounted(async () => {
   // 快捷键支持
   window.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault()
-      searchInputRef.value?.focus()
+      showCommandPalette.value = true
     }
   })
 

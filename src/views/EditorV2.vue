@@ -42,6 +42,10 @@
       <div class="status">
         <span v-if="isSaving" class="status-text saving">保存中...</span>
         <span v-else class="status-text saved">已保存</span>
+        <!-- 收藏按钮 -->
+        <el-button link :type="note?.isStarred ? 'warning' : 'default'" @click="handleToggleStar">
+          <el-icon><StarFilled v-if="note?.isStarred" /><Star v-else /></el-icon>
+        </el-button>
         <!-- 删除按钮 -->
         <el-button link type="danger" @click="handleDelete">
           <el-icon><Delete /></el-icon>
@@ -62,6 +66,9 @@
       
       <!-- Tiptap 编辑器 -->
       <editor-content :editor="editor" class="tiptap-editor" />
+
+      <!-- 浮动工具栏 -->
+      <BubbleToolbar v-if="editor" :editor="editor" />
 
       <!-- Slash Menu -->
       <div v-if="showSlashMenu" class="slash-menu" :style="menuStyle">
@@ -115,8 +122,9 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Typography from '@tiptap/extension-typography'
+import Highlight from '@tiptap/extension-highlight'
 import { Markdown } from 'tiptap-markdown'
-import { Delete, Folder } from '@element-plus/icons-vue'
+import { Delete, Folder, Star, StarFilled } from '@element-plus/icons-vue'
 import { useNotesStore } from '@/stores/notes'
 import { useFoldersStore } from '@/stores/folders'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -126,6 +134,7 @@ import { VideoBlock } from '@/components/editor/extensions/VideoBlock'
 import { FileBlock } from '@/components/editor/extensions/FileBlock'
 import { useAttachment } from '@/composables/useAttachment'
 import RecordingPanel from '@/components/editor/RecordingPanel.vue'
+import BubbleToolbar from '@/components/editor/BubbleToolbar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -158,6 +167,7 @@ const editor = useEditor({
   extensions: [
     StarterKit,
     Typography,
+    Highlight,
     Placeholder.configure({
       placeholder: '输入 / 以使用命令...',
     }),
@@ -426,7 +436,17 @@ async function handleRecorded(file: File) {
   insertToEditor(editor.value, result, category, file.name)
 }
 
-// 删除笔记
+// 收藏/取消收藏
+async function handleToggleStar() {
+  if (!noteId.value) return
+  if (note.value?.isStarred) {
+    await notesStore.unstarNote(noteId.value)
+  } else {
+    await notesStore.starNote(noteId.value)
+  }
+}
+
+// 删除笔记（软删除到回收站）
 async function handleDelete() {
   if (!noteId.value) return
   try {

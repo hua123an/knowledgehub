@@ -183,6 +183,28 @@ export const useNotesStore = defineStore('notes', () => {
     searchResults.value = []
   }
 
+  async function starNote(id: string) {
+    const result = await window.api.noteStar(id)
+    if (result.success) {
+      const index = notes.value.findIndex(n => n.id === id)
+      if (index !== -1) notes.value[index] = { ...notes.value[index], isStarred: true }
+      if (currentNote.value?.id === id) currentNote.value = { ...currentNote.value, isStarred: true }
+      return true
+    }
+    return false
+  }
+
+  async function unstarNote(id: string) {
+    const result = await window.api.noteUnstar(id)
+    if (result.success) {
+      const index = notes.value.findIndex(n => n.id === id)
+      if (index !== -1) notes.value[index] = { ...notes.value[index], isStarred: false }
+      if (currentNote.value?.id === id) currentNote.value = { ...currentNote.value, isStarred: false }
+      return true
+    }
+    return false
+  }
+
   async function fetchNoteById(id: string) {
     const result = await window.api.noteGet(id)
     if (result.success && result.data) {
@@ -229,5 +251,7 @@ export const useNotesStore = defineStore('notes', () => {
     clearSearchResults,
     setFilter,
     filteredNotes,
+    starNote,
+    unstarNote,
   }
 })

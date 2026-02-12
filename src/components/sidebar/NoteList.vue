@@ -30,7 +30,10 @@
         
         <!-- 笔记信息 -->
         <div class="note-info">
-          <div class="note-title truncate">{{ note.title || '无标题' }}</div>
+          <div class="note-title-row">
+            <span class="note-title truncate">{{ note.title || '无标题' }}</span>
+            <el-icon v-if="note.isStarred" class="star-icon"><StarFilled /></el-icon>
+          </div>
           <div class="note-meta">
             <span class="note-time">{{ formatTime(note.updatedAt) }}</span>
             <span v-if="note.tags && note.tags.length" class="note-tags">
@@ -47,7 +50,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Document, EditPen, Link, PriceTag } from '@element-plus/icons-vue'
+import { Document, EditPen, Link, PriceTag, StarFilled } from '@element-plus/icons-vue'
 import { useNotesStore } from '@/stores/notes'
 import type { Note } from '@/types'
 
@@ -205,11 +208,25 @@ function handleSelectNote(note: Note) {
   min-width: 0;
 }
 
+.note-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .note-title {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.star-icon {
+  font-size: 12px;
+  color: #f5a623;
+  flex-shrink: 0;
 }
 
 .note-item.active .note-title {

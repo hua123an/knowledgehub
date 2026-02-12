@@ -107,7 +107,19 @@ export function initDatabase(): DatabaseType {
   `
   
   db.exec(schema)
-  
+
+  // 为已有数据库添加新列（软删除 + 收藏）
+  try {
+    db.exec(`ALTER TABLE notes ADD COLUMN deleted_at TEXT DEFAULT NULL`)
+  } catch (e) {
+    // 列可能已存在
+  }
+  try {
+    db.exec(`ALTER TABLE notes ADD COLUMN is_starred INTEGER DEFAULT 0`)
+  } catch (e) {
+    // 列可能已存在
+  }
+
   // 创建全文搜索表（如果不存在）
   try {
     db.exec(`

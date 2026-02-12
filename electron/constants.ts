@@ -12,6 +12,11 @@ export const IPC_CHANNELS = {
   NOTE_GET: 'note:get',
   NOTE_LIST: 'note:list',
   NOTE_SEARCH: 'note:search',
+  NOTE_RESTORE: 'note:restore',
+  NOTE_PERMANENT_DELETE: 'note:permanentDelete',
+  NOTE_TRASH_LIST: 'note:trashList',
+  NOTE_STAR: 'note:star',
+  NOTE_UNSTAR: 'note:unstar',
   
   // 文件夹操作
   FOLDER_CREATE: 'folder:create',
@@ -53,6 +58,7 @@ export const IPC_CHANNELS = {
   AI_TRANSLATE: 'ai:translate',
   AI_EXPLAIN: 'ai:explain',
   AI_SEARCH_ENHANCE: 'ai:searchEnhance',
+  AI_WEB_SEARCH: 'ai:webSearch',
   AI_CHAT_HISTORY_LIST: 'ai:chatHistoryList',
   AI_CHAT_HISTORY_GET: 'ai:chatHistoryGet',
   AI_CHAT_HISTORY_SAVE: 'ai:chatHistorySave',

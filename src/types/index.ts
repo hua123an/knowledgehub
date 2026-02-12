@@ -10,6 +10,8 @@ export interface Note {
   folderId: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null
+  isStarred?: boolean
   tags?: Tag[]
   // 书签特有字段
   url?: string

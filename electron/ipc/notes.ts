@@ -18,6 +18,8 @@ interface NoteRow {
   language: string | null
   created_at: string
   updated_at: string
+  deleted_at: string | null
+  is_starred: number
 }
 
 function rowToNote(row: NoteRow) {
@@ -33,6 +35,8 @@ function rowToNote(row: NoteRow) {
     language: row.language || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    isStarred: row.is_starred === 1,
   }
 }
 
@@ -181,24 +185,11 @@ export function registerNoteHandlers() {
     }
   })
 
-  // 删除笔记
+  // 删除笔记（软删除 - 移入回收站）
   ipcMain.handle(IPC_CHANNELS.NOTE_DELETE, async (_event, id) => {
     try {
-      // Get existing note to find file path
-      const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined
-      if (globalContext.currentWorkspace && existing) {
-         const filePath = path.join(globalContext.currentWorkspace, `${existing.title}.md`)
-         try {
-           if (fs.existsSync(filePath)) {
-             fs.unlinkSync(filePath)
-             console.log('[Main] Deleted file:', filePath)
-           }
-         } catch (e) {
-           console.error('[Main] Delete file failed:', e)
-         }
-      }
-
-      db.prepare('DELETE FROM notes WHERE id = ?').run(id)
+      const now = new Date().toISOString()
+      db.prepare('UPDATE notes SET deleted_at = ? WHERE id = ?').run(now, id)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -221,9 +212,9 @@ export function registerNoteHandlers() {
   // 获取笔记列表
   ipcMain.handle(IPC_CHANNELS.NOTE_LIST, async (_event, filters = {}) => {
     try {
-      let sql = 'SELECT * FROM notes WHERE 1=1'
+      let sql = 'SELECT * FROM notes WHERE deleted_at IS NULL'
       const params: any[] = []
-      
+
       if (filters.type) {
         sql += ' AND type = ?'
         params.push(filters.type)
@@ -236,9 +227,9 @@ export function registerNoteHandlers() {
           params.push(filters.folderId)
         }
       }
-      
-      sql += ' ORDER BY updated_at DESC'
-      
+
+      sql += ' ORDER BY is_starred DESC, updated_at DESC'
+
       const rows = db.prepare(sql).all(...params) as NoteRow[]
       return { success: true, data: rows.map(rowToNote) }
     } catch (error) {
@@ -255,8 +246,8 @@ export function registerNoteHandlers() {
       
       const searchTerm = `%${query}%`
       const rows = db.prepare(`
-        SELECT * FROM notes 
-        WHERE title LIKE ? OR content LIKE ?
+        SELECT * FROM notes
+        WHERE (title LIKE ? OR content LIKE ?) AND deleted_at IS NULL
         ORDER BY updated_at DESC
         LIMIT 50
       `).all(searchTerm, searchTerm) as NoteRow[]
@@ -284,6 +275,71 @@ export function registerNoteHandlers() {
       return { success: true, data: results }
     } catch (error) {
       console.error('Search error:', error)
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 恢复笔记（从回收站恢复）
+  ipcMain.handle(IPC_CHANNELS.NOTE_RESTORE, async (_event, id) => {
+    try {
+      db.prepare('UPDATE notes SET deleted_at = NULL WHERE id = ?').run(id)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 永久删除笔记
+  ipcMain.handle(IPC_CHANNELS.NOTE_PERMANENT_DELETE, async (_event, id) => {
+    try {
+      const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined
+      if (globalContext.currentWorkspace && existing) {
+        const filePath = path.join(globalContext.currentWorkspace, `${existing.title}.md`)
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+            console.log('[Main] Permanently deleted file:', filePath)
+          }
+        } catch (e) {
+          console.error('[Main] Delete file failed:', e)
+        }
+      }
+
+      db.prepare('DELETE FROM notes WHERE id = ?').run(id)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 获取回收站列表
+  ipcMain.handle(IPC_CHANNELS.NOTE_TRASH_LIST, async () => {
+    try {
+      const rows = db.prepare(
+        'SELECT * FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC'
+      ).all() as NoteRow[]
+      return { success: true, data: rows.map(rowToNote) }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 收藏笔记
+  ipcMain.handle(IPC_CHANNELS.NOTE_STAR, async (_event, id) => {
+    try {
+      db.prepare('UPDATE notes SET is_starred = 1 WHERE id = ?').run(id)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // 取消收藏笔记
+  ipcMain.handle(IPC_CHANNELS.NOTE_UNSTAR, async (_event, id) => {
+    try {
+      db.prepare('UPDATE notes SET is_starred = 0 WHERE id = ?').run(id)
+      return { success: true }
+    } catch (error) {
       return { success: false, error: String(error) }
     }
   })

@@ -121,6 +121,10 @@
                     <p>正在获取目录结构...</p>
                     <el-icon class="is-loading"><Loading /></el-icon>
                   </div>
+                  <div v-if="action.type === 'web_search'">
+                    <p>🌐 联网搜索: <strong>{{ action.data.query }}</strong></p>
+                    <span class="auto-badge">自动执行</span>
+                  </div>
 
                </div>
              </div>
@@ -347,7 +351,7 @@ watch(() => aiStore.currentConversation.messages, (newVal: any[]) => {
   const lastMsg = newVal[lastIdx]
   if (lastMsg.role === 'assistant' && !aiStore.streaming && !searchHandledMsgIds.has(lastIdx)) {
      const actions = extractActions(lastMsg.content)
-     const autoActions = actions.filter(a => ['search_notes', 'list_folders'].includes(a.type))
+     const autoActions = actions.filter(a => ['search_notes', 'list_folders', 'web_search'].includes(a.type))
      if (autoActions.length > 0) {
        searchHandledMsgIds.add(lastIdx)
        autoActions.forEach(a => handleAction(a))
@@ -407,6 +411,33 @@ async function handleAction(action: any, skipConfirm = false) {
       await aiStore.sendMessage(`【系统反馈 - 目录结构】：\n${treeText || '暂无文件夹'}\n\n请根据以上目录结构继续操作。若需创建新文件夹，请使用 create_folder。若需移动笔记，请使用 move_note。`, undefined)
     } catch (e) {
       await aiStore.sendMessage(`【系统反馈】获取目录失败。`, undefined)
+    }
+    return
+  }
+
+  if (action.type === 'web_search') {
+    const { query } = action.data
+    try {
+      const results = await window.api.aiWebSearch(query)
+      if (results.success && results.data) {
+        const resultText = results.data.map((r: any, i: number) =>
+          `${i + 1}. **${r.title}**\n   链接: ${r.url}\n   摘要: ${r.snippet}`
+        ).join('\n\n')
+        await aiStore.sendMessage(
+          `【系统反馈 - 联网搜索结果】搜索 "${query}" 找到 ${results.data.length} 条结果：\n\n${resultText}\n\n请基于以上搜索结果回答用户的问题。用中文回答。`,
+          undefined
+        )
+      } else {
+        await aiStore.sendMessage(
+          `【系统反馈 - 联网搜索失败】${results.error || '未找到结果'}。请尝试用其他关键词搜索，或基于已有知识回答。`,
+          undefined
+        )
+      }
+    } catch (e: any) {
+      await aiStore.sendMessage(
+        `【系统反馈 - 联网搜索失败】${e.message || '搜索出错'}`,
+        undefined
+      )
     }
     return
   }

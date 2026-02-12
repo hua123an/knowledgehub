@@ -8,6 +8,11 @@ const api = {
   noteGet: (id: string) => ipcRenderer.invoke('note:get', id),
   noteList: (filters?: any) => ipcRenderer.invoke('note:list', filters),
   noteSearch: (query: string) => ipcRenderer.invoke('note:search', query),
+  noteRestore: (id: string) => ipcRenderer.invoke('note:restore', id),
+  notePermanentDelete: (id: string) => ipcRenderer.invoke('note:permanentDelete', id),
+  noteTrashList: () => ipcRenderer.invoke('note:trashList'),
+  noteStar: (id: string) => ipcRenderer.invoke('note:star', id),
+  noteUnstar: (id: string) => ipcRenderer.invoke('note:unstar', id),
 
   // 文件夹操作
   folderCreate: (folder: any) => ipcRenderer.invoke('folder:create', folder),
@@ -49,6 +54,7 @@ const api = {
   aiTranslate: (content: string, lang: string) => ipcRenderer.invoke('ai:translate', content, lang),
   aiExplain: (content: string) => ipcRenderer.invoke('ai:explain', content),
   aiSearchEnhance: (query: string) => ipcRenderer.invoke('ai:searchEnhance', query),
+  aiWebSearch: (query: string) => ipcRenderer.invoke('ai:webSearch', query),
   aiChatHistoryList: () => ipcRenderer.invoke('ai:chatHistoryList'),
   aiChatHistoryGet: (id: string) => ipcRenderer.invoke('ai:chatHistoryGet', id),
   aiChatHistorySave: (id: string, title: string, messages: any[]) => ipcRenderer.invoke('ai:chatHistorySave', id, title, messages),

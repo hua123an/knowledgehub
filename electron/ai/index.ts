@@ -13,6 +13,7 @@ import {
   aiExplain,
   aiSearchEnhance,
 } from './service'
+import { webSearch } from './websearch'
 import type { ChatMessage } from './service'
 
 export function registerAIHandlers() {
@@ -150,6 +151,16 @@ export function registerAIHandlers() {
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
+    }
+  })
+
+  // 联网搜索
+  ipcMain.handle(IPC_CHANNELS.AI_WEB_SEARCH, async (_event, query: string) => {
+    try {
+      const results = await webSearch(query)
+      return { success: true, data: results }
+    } catch (error: any) {
+      return { success: false, error: error.message || String(error) }
     }
   })
 

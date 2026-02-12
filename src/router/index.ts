@@ -34,6 +34,16 @@ const routes: RouteRecordRaw[] = [
     name: 'welcome',
     component: () => import('../views/Welcome.vue'),
   },
+  {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('../views/Settings.vue'),
+  },
+  {
+    path: '/trash',
+    name: 'trash',
+    component: () => import('../views/Trash.vue'),
+  },
 ]
 
 const router = createRouter({

@@ -15,6 +15,11 @@ interface Window {
     noteUpdate: (id: string, updates: any) => Promise<any>;
     noteDelete: (id: string) => Promise<any>;
     noteSearch: (query: string) => Promise<any>;
+    noteRestore: (id: string) => Promise<any>;
+    notePermanentDelete: (id: string) => Promise<any>;
+    noteTrashList: () => Promise<any>;
+    noteStar: (id: string) => Promise<any>;
+    noteUnstar: (id: string) => Promise<any>;
 
     // Folder Operations
     folderList: () => Promise<any>;
@@ -61,6 +66,7 @@ interface Window {
     aiTranslate: (content: string, lang: string) => Promise<any>;
     aiExplain: (content: string) => Promise<any>;
     aiSearchEnhance: (query: string) => Promise<any>;
+    aiWebSearch: (query: string) => Promise<any>;
 
     // Attachment Operations
     attachmentUpload: (params: any) => Promise<any>;
